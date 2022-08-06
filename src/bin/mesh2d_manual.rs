@@ -2,20 +2,34 @@
 //! pipeline for 2d meshes.
 //! It doesn't use the [`Material2d`] abstraction, but changes the vertex buffer to include vertex color. Check out the "mesh2d" example for simpler / higher level 2d meshes.
 
+use std::marker::PhantomData;
+
 use bevy::{
+    core::Pod,
     core_pipeline::core_2d::Transparent2d,
+    ecs::system::{lifetimeless::SRes, SystemParamItem},
+    math::vec4,
     prelude::*,
     reflect::TypeUuid,
     render::{
+        extract_component::ExtractComponentPlugin,
+        extract_resource::{ExtractResource, ExtractResourcePlugin},
         mesh::{Indices, MeshVertexAttribute},
         render_asset::RenderAssets,
-        render_phase::{AddRenderCommand, DrawFunctions, RenderPhase, SetItemPipeline},
-        render_resource::{
-            BlendState, ColorTargetState, ColorWrites, Face, FragmentState, FrontFace,
-            MultisampleState, PipelineCache, PolygonMode, PrimitiveState, PrimitiveTopology,
-            RenderPipelineDescriptor, SpecializedRenderPipeline, SpecializedRenderPipelines,
-            TextureFormat, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+        render_phase::{
+            AddRenderCommand, DrawFunctions, EntityRenderCommand, RenderCommandResult, RenderPhase,
+            SetItemPipeline, TrackedRenderPass,
         },
+        render_resource::{
+            BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+            BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BlendState, Buffer,
+            BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, ColorTargetState,
+            ColorWrites, Face, FragmentState, FrontFace, MultisampleState, PipelineCache,
+            PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipelineDescriptor, ShaderStages,
+            SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat,
+            VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+        },
+        renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
         view::VisibleEntities,
         Extract, RenderApp, RenderStage,
@@ -61,7 +75,7 @@ fn star(
         v_color,
     );
 
-    let  indices = vec![2, 1, 0, 3, 1, 2];
+    let indices = vec![2, 1, 0, 3, 1, 2];
     star.set_indices(Some(Indices::U32(indices)));
 
     // We can now spawn the entities for the star and the camera
@@ -80,20 +94,20 @@ fn star(
     use bevy::sprite::MaterialMesh2dBundle;
 
     // Rectangle
-    commands
-        .spawn_bundle(MaterialMesh2dBundle {
-            mesh: meshes.add(shape::Quad::new(Vec2::new(50., 100.)).into()).into(),
-            material: materials.add(ColorMaterial::from(Color::RED)),
-            ..default()
-        });
+    commands.spawn_bundle(MaterialMesh2dBundle {
+        mesh: meshes
+            .add(shape::Quad::new(Vec2::new(50., 100.)).into())
+            .into(),
+        material: materials.add(ColorMaterial::from(Color::RED)),
+        ..default()
+    });
 
     // Circle
-    commands
-        .spawn_bundle(MaterialMesh2dBundle {
-            mesh: meshes.add(shape::Circle::new(50.).into()).into(),
-            material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
-            ..default()
-        });
+    commands.spawn_bundle(MaterialMesh2dBundle {
+        mesh: meshes.add(shape::Circle::new(50.).into()).into(),
+        material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
+        ..default()
+    });
     commands
         // And use an orthographic projection
         .spawn_bundle(Camera2dBundle::default());
@@ -107,12 +121,30 @@ pub struct ColoredMesh2d;
 pub struct ColoredMesh2dPipeline {
     /// this pipeline wraps the standard [`Mesh2dPipeline`]
     mesh2d_pipeline: Mesh2dPipeline,
+    color_uniform_layout: BindGroupLayout,
 }
 
 impl FromWorld for ColoredMesh2dPipeline {
     fn from_world(world: &mut World) -> Self {
+        let render_device = world.resource::<RenderDevice>();
+        let color_uniform_layout =
+            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("time bind group"),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new((std::mem::size_of::<f32>() * 4) as u64),
+                    },
+                    count: None,
+                }],
+            });
+
         Self {
             mesh2d_pipeline: Mesh2dPipeline::from_world(world),
+            color_uniform_layout,
         }
     }
 }
@@ -160,6 +192,7 @@ impl SpecializedRenderPipeline for ColoredMesh2dPipeline {
                 self.mesh2d_pipeline.view_layout.clone(),
                 // Bind group 1 is the mesh uniform
                 self.mesh2d_pipeline.mesh_layout.clone(),
+                self.color_uniform_layout.clone(),
             ]),
             primitive: PrimitiveState {
                 front_face: FrontFace::Ccw,
@@ -189,6 +222,7 @@ type DrawColoredMesh2d = (
     SetMesh2dViewBindGroup<0>,
     // Set the mesh uniform as bind group 1
     SetMesh2dBindGroup<1>,
+    SetColorUniformBindGroup<2, ColorUniform>,
     // Draw the mesh
     DrawMesh2d,
 );
@@ -225,6 +259,14 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.color = vec4<f32>(1.0, 1.0, 0., 1.0);
     return out;
 }
+
+struct Color {
+    color: vec4<f32>,
+};
+
+@group(2) @binding(0)
+var<uniform> color: Color;
+
 // The input of the fragment shader must correspond to the output of the vertex shader for all `location`s
 struct FragmentInput {
     // The color is interpolated between vertices by default
@@ -233,9 +275,98 @@ struct FragmentInput {
 /// Entry point for the fragment shader
 @fragment
 fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
-    return in.color;
+    return color.color;
 }
 ";
+
+struct ColorUniform(Color);
+impl Default for ColorUniform {
+    fn default() -> Self {
+        Self(Color::BLUE)
+    }
+}
+
+#[derive(Default)]
+struct ExtractedColor {
+    color: Vec4,
+}
+
+trait GetPod {
+    type Inner: Pod;
+
+    fn get(&self) -> Self::Inner;
+}
+
+impl GetPod for ExtractedColor {
+    type Inner = Vec4;
+
+    fn get(&self) -> Self::Inner {
+        self.color
+    }
+}
+
+impl ExtractResource for ExtractedColor {
+    type Source = ColorUniform;
+
+    fn extract_resource(unif: &Self::Source) -> Self {
+        ExtractedColor {
+            color: vec4(unif.0.r(), unif.0.g(), unif.0.b(), unif.0.a()),
+        }
+    }
+}
+
+// write the extracted time into the corresponding uniform buffer
+fn prepare_uniform<T: Send + Sync + 'static, R: ExtractResource<Source = T> + GetPod>(
+    time: Res<R>,
+    time_meta: ResMut<UniformMeta<T>>,
+    render_queue: Res<RenderQueue>,
+) {
+    render_queue.write_buffer(&time_meta.buffer, 0, bevy::core::cast_slice(&[time.get()]));
+}
+
+struct UniformMeta<T> {
+    pd: PhantomData<T>,
+    buffer: Buffer,
+    bind_group: Option<BindGroup>,
+}
+
+// create a bind group for the time uniform buffer
+fn queue_time_bind_group<T: Send + Sync + 'static>(
+    render_device: Res<RenderDevice>,
+    mut time_meta: ResMut<UniformMeta<T>>,
+    pipeline: Res<ColoredMesh2dPipeline>,
+) {
+    let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.color_uniform_layout,
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: time_meta.buffer.as_entire_binding(),
+        }],
+    });
+    time_meta.bind_group = Some(bind_group);
+}
+
+#[derive(Default)]
+struct SetColorUniformBindGroup<const I: usize, T>(PhantomData<T>);
+
+impl<const I: usize, T: Send + Sync + 'static> EntityRenderCommand
+    for SetColorUniformBindGroup<I, T>
+{
+    type Param = SRes<UniformMeta<T>>;
+
+    fn render<'w>(
+        _view: Entity,
+        _item: Entity,
+        time_meta: SystemParamItem<'w, '_, Self::Param>,
+        pass: &mut TrackedRenderPass<'w>,
+    ) -> RenderCommandResult {
+        let time_bind_group = time_meta.into_inner().bind_group.as_ref().unwrap();
+        pass.set_bind_group(I, time_bind_group, &[]);
+
+        RenderCommandResult::Success
+    }
+}
 
 /// Plugin that renders [`ColoredMesh2d`]s
 pub struct ColoredMesh2dPlugin;
@@ -253,14 +384,36 @@ impl Plugin for ColoredMesh2dPlugin {
             Shader::from_wgsl(COLORED_MESH2D_SHADER),
         );
 
+        app.insert_resource::<ColorUniform>(ColorUniform(Color::ORANGE));
+
+        let render_device = app.world.resource::<RenderDevice>();
+        let buffer = render_device.create_buffer(&BufferDescriptor {
+            label: Some("time uniform buffer"),
+            size: (std::mem::size_of::<f32>() * 4) as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        app.add_plugin(ExtractResourcePlugin::<ExtractedColor>::default());
+
         // Register our custom draw function and pipeline, and add our render systems
         let render_app = app.get_sub_app_mut(RenderApp).unwrap();
         render_app
             .add_render_command::<Transparent2d, DrawColoredMesh2d>()
             .init_resource::<ColoredMesh2dPipeline>()
+            .insert_resource(UniformMeta::<ColorUniform> {
+                buffer,
+                pd: PhantomData,
+                bind_group: None,
+            })
             .init_resource::<SpecializedRenderPipelines<ColoredMesh2dPipeline>>()
+            .add_system_to_stage(
+                RenderStage::Prepare,
+                prepare_uniform::<ColorUniform, ExtractedColor>,
+            )
             .add_system_to_stage(RenderStage::Extract, extract_colored_mesh2d)
-            .add_system_to_stage(RenderStage::Queue, queue_colored_mesh2d);
+            .add_system_to_stage(RenderStage::Queue, queue_colored_mesh2d)
+            .add_system_to_stage(RenderStage::Queue, queue_time_bind_group::<ColorUniform>);
     }
 }
 

@@ -7,8 +7,11 @@ use bevy::{
     render::{
         mesh::MeshVertexBufferLayout,
         render_resource::{
-            AsBindGroup, RenderPipelineDescriptor, ShaderRef, SpecializedMeshPipelineError,
+            AsBindGroup, CompareFunction, DepthBiasState, DepthStencilState,
+            RenderPipelineDescriptor, ShaderRef, SpecializedMeshPipelineError, StencilState,
+            TextureFormat,
         },
+        texture::BevyDefault,
     },
     sprite::{
         Material2d, Material2dKey, Material2dPipeline, Material2dPlugin, MaterialMesh2dBundle,
@@ -78,6 +81,7 @@ impl Material2d for CustomMaterial {
     ) -> Result<(), SpecializedMeshPipelineError> {
         descriptor.vertex.entry_point = "main".into();
         descriptor.fragment.as_mut().unwrap().entry_point = "main".into();
+
         Ok(())
     }
 }
