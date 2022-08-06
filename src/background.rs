@@ -35,69 +35,36 @@ use bevy::{
     utils::FloatOrd,
 };
 
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(ColoredMesh2dPlugin)
-        .add_startup_system(star)
-        .run();
-}
-
-fn star(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
+fn setup_background(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     // Let's define the mesh for the object we want to draw: a nice star.
     // We will specify here what kind of topology is used to define the mesh,
     // that is, how triangles are built from the vertices. We will use a
     // triangle list, meaning that each vertex of the triangle has to be
     // specified.
-    let mut star = Mesh::new(PrimitiveTopology::TriangleList);
-    let mi = -0.8;
-    let ma = 0.8;
+    let mut background = Mesh::new(PrimitiveTopology::TriangleList);
+    let mi = -1.0;
+    let ma = 1.0;
     let v_pos = vec![[mi, mi, 0.0], [mi, ma, 0.0], [ma, mi, 0.0], [ma, ma, 0.0]];
 
-    star.insert_attribute(Mesh::ATTRIBUTE_POSITION, v_pos);
+    background.insert_attribute(Mesh::ATTRIBUTE_POSITION, v_pos);
     // And a RGB color attribute as well
     let mut v_color: Vec<u32> = vec![Color::BLACK.as_linear_rgba_u32()];
     v_color.extend_from_slice(&[Color::YELLOW.as_linear_rgba_u32(); 3]);
 
     let indices = vec![2, 1, 0, 3, 1, 2];
-    star.set_indices(Some(Indices::U32(indices)));
+    background.set_indices(Some(Indices::U32(indices)));
 
     // We can now spawn the entities for the star and the camera
     commands.spawn_bundle((
         // We use a marker component to identify the custom colored meshes
         BackgroundMesh2d::default(),
         // The `Handle<Mesh>` needs to be wrapped in a `Mesh2dHandle` to use 2d rendering instead of 3d
-        Mesh2dHandle(meshes.add(star)),
+        Mesh2dHandle(meshes.add(background)),
         // These other components are needed for 2d meshes to be rendered
         GlobalTransform::default(),
         Visibility::default(),
         ComputedVisibility::default(),
     ));
-
-    use bevy::sprite::MaterialMesh2dBundle;
-
-    // Rectangle
-    commands.spawn_bundle(MaterialMesh2dBundle {
-        mesh: meshes
-            .add(shape::Quad::new(Vec2::new(50., 100.)).into())
-            .into(),
-        material: materials.add(ColorMaterial::from(Color::RED)),
-        ..default()
-    });
-
-    // Circle
-    commands.spawn_bundle(MaterialMesh2dBundle {
-        mesh: meshes.add(shape::Circle::new(50.).into()).into(),
-        material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
-        ..default()
-    });
-    commands
-        // And use an orthographic projection
-        .spawn_bundle(Camera2dBundle::default());
 }
 
 #[derive(Component, Default)]
@@ -212,15 +179,18 @@ type DrawBackgroundMesh2d = (
     SetMesh2dViewBindGroup<0>,
     // Set the mesh uniform as bind group 1
     SetMesh2dBindGroup<1>,
-    SetColorUniformBindGroup<2, ColorUniform>,
+    SetColorUniformBindGroup<2, BackgroundConfig>,
     // Draw the mesh
     DrawMesh2d,
 );
 
-struct ColorUniform(Color);
-impl Default for ColorUniform {
+pub struct BackgroundConfig {
+    pub color: Color,
+}
+
+impl Default for BackgroundConfig {
     fn default() -> Self {
-        Self(Color::BLUE)
+        Self { color: Color::BLUE }
     }
 }
 
@@ -244,11 +214,12 @@ impl GetPod for ExtractedColor {
 }
 
 impl ExtractResource for ExtractedColor {
-    type Source = ColorUniform;
+    type Source = BackgroundConfig;
 
     fn extract_resource(unif: &Self::Source) -> Self {
+        let color = unif.color;
         ExtractedColor {
-            color: vec4(unif.0.r(), unif.0.g(), unif.0.b(), unif.0.a()),
+            color: vec4(color.r(), color.g(), color.b(), color.a()),
         }
     }
 }
@@ -271,7 +242,7 @@ struct UniformMeta<T> {
 // create a bind group for the time uniform buffer
 fn queue_time_bind_group<T: Send + Sync + 'static>(
     render_device: Res<RenderDevice>,
-    mut time_meta: ResMut<UniformMeta<T>>,
+    mut uniform_meta: ResMut<UniformMeta<T>>,
     pipeline: Res<BackgroundMesh2dPipeline>,
 ) {
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
@@ -279,10 +250,10 @@ fn queue_time_bind_group<T: Send + Sync + 'static>(
         layout: &pipeline.color_uniform_layout,
         entries: &[BindGroupEntry {
             binding: 0,
-            resource: time_meta.buffer.as_entire_binding(),
+            resource: uniform_meta.buffer.as_entire_binding(),
         }],
     });
-    time_meta.bind_group = Some(bind_group);
+    uniform_meta.bind_group = Some(bind_group);
 }
 
 #[derive(Default)]
@@ -306,13 +277,15 @@ impl<const I: usize, T: Send + Sync + 'static> EntityRenderCommand
     }
 }
 
-/// Plugin that renders [`ColoredMesh2d`]s
-pub struct ColoredMesh2dPlugin;
+pub struct BackgroundPlugin;
 
-impl Plugin for ColoredMesh2dPlugin {
+impl Plugin for BackgroundPlugin {
     fn build(&self, app: &mut App) {
         // Load our custom shader
-        app.insert_resource::<ColorUniform>(ColorUniform(Color::ORANGE));
+        app.insert_resource::<BackgroundConfig>(BackgroundConfig {
+            color: Color::ORANGE_RED,
+        });
+        app.add_startup_system(setup_background);
 
         let render_device = app.world.resource::<RenderDevice>();
         let buffer = render_device.create_buffer(&BufferDescriptor {
@@ -329,7 +302,7 @@ impl Plugin for ColoredMesh2dPlugin {
         render_app
             .add_render_command::<Transparent2d, DrawBackgroundMesh2d>()
             .init_resource::<BackgroundMesh2dPipeline>()
-            .insert_resource(UniformMeta::<ColorUniform> {
+            .insert_resource(UniformMeta::<BackgroundConfig> {
                 buffer,
                 pd: PhantomData,
                 bind_group: None,
@@ -337,11 +310,14 @@ impl Plugin for ColoredMesh2dPlugin {
             .init_resource::<SpecializedRenderPipelines<BackgroundMesh2dPipeline>>()
             .add_system_to_stage(
                 RenderStage::Prepare,
-                prepare_uniform::<ColorUniform, ExtractedColor>,
+                prepare_uniform::<BackgroundConfig, ExtractedColor>,
             )
             .add_system_to_stage(RenderStage::Extract, extract_colored_mesh2d)
             .add_system_to_stage(RenderStage::Queue, queue_colored_mesh2d)
-            .add_system_to_stage(RenderStage::Queue, queue_time_bind_group::<ColorUniform>);
+            .add_system_to_stage(
+                RenderStage::Queue,
+                queue_time_bind_group::<BackgroundConfig>,
+            );
     }
 }
 
