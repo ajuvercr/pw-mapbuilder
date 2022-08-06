@@ -1,10 +1,23 @@
 // Import the standard 2d mesh uniforms and set their bind groups
 #import bevy_sprite::mesh2d_types
-#import bevy_sprite::mesh2d_view_bindings
-@group(1) @binding(0)
-var<uniform> mesh: Mesh2d;
+
+// I do not understand why I cannot just import this View thing
+struct View {
+    view_proj: mat4x4<f32>,
+    inverse_view_proj: mat4x4<f32>,
+    view: mat4x4<f32>,
+    inverse_view: mat4x4<f32>,
+    projection: mat4x4<f32>,
+    inverse_projection: mat4x4<f32>,
+    world_position: vec3<f32>,
+    width: f32,
+    height: f32,
+};
+
+@group(0) @binding(0)
+var<uniform> view: View;
+
 // NOTE: Bindings must come before functions that use them!
-#import bevy_sprite::mesh2d_functions
 // The structure of the vertex buffer is as specified in `specialize()`
 struct Vertex {
     @location(0) position: vec3<f32>,
@@ -14,19 +27,26 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) position: vec2<f32>,
 };
+
 /// Entry point for the vertex shader
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
     out.clip_position = vec4<f32>(vertex.position, 1.0);
-    out.position = vec2<f32>(vertex.position.xy) * 10.0;
+
+    let ratio: f32 = view.width / view.height;
+    /* let ratio: f32 = 1699.0 / 1387.0; */
+    let uv = vec2<f32>(vertex.position.x * ratio    , vertex.position.y  );
+    out.position = vec2<f32>(uv * 10.);
     return out;
 }
+
 
 struct Color {
      color: vec4<f32>,
 };
-@group(2) @binding(0)
+
+@group(1) @binding(0)
 var<uniform> color: Color;
 
 
@@ -50,3 +70,4 @@ fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
     var bt = 1.0 - b;
     return b * color.color + bt * vec4(0.0, 0.0, 0.0, 1.0);
 }
+

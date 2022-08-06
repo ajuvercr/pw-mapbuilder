@@ -25,12 +25,12 @@ use bevy::{
         },
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
-        view::VisibleEntities,
+        view::{VisibleEntities, ViewUniforms, ExtractedView},
         Extract, RenderApp, RenderStage,
     },
     sprite::{
-        DrawMesh2d, Mesh2dHandle, Mesh2dPipeline, Mesh2dPipelineKey, SetMesh2dBindGroup,
-        SetMesh2dViewBindGroup,
+        DrawMesh2d, Mesh2dHandle, Mesh2dPipeline, Mesh2dPipelineKey,
+        SetMesh2dViewBindGroup, Mesh2dViewBindGroup,
     },
     utils::FloatOrd,
 };
@@ -42,8 +42,8 @@ fn setup_background(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     // triangle list, meaning that each vertex of the triangle has to be
     // specified.
     let mut background = Mesh::new(PrimitiveTopology::TriangleList);
-    let mi = -1.0;
-    let ma = 1.0;
+    let mi = -0.8;
+    let ma = 0.8;
     let v_pos = vec![[mi, mi, 0.0], [mi, ma, 0.0], [ma, mi, 0.0], [ma, ma, 0.0]];
 
     background.insert_attribute(Mesh::ATTRIBUTE_POSITION, v_pos);
@@ -61,6 +61,7 @@ fn setup_background(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
         // The `Handle<Mesh>` needs to be wrapped in a `Mesh2dHandle` to use 2d rendering instead of 3d
         Mesh2dHandle(meshes.add(background)),
         // These other components are needed for 2d meshes to be rendered
+        Transform::default(),
         GlobalTransform::default(),
         Visibility::default(),
         ComputedVisibility::default(),
@@ -148,7 +149,6 @@ impl SpecializedRenderPipeline for BackgroundMesh2dPipeline {
                 // Bind group 0 is the view uniform
                 self.mesh2d_pipeline.view_layout.clone(),
                 // Bind group 1 is the mesh uniform
-                self.mesh2d_pipeline.mesh_layout.clone(),
                 self.color_uniform_layout.clone(),
             ]),
             primitive: PrimitiveState {
@@ -178,8 +178,8 @@ type DrawBackgroundMesh2d = (
     // Set the view uniform as bind group 0
     SetMesh2dViewBindGroup<0>,
     // Set the mesh uniform as bind group 1
-    SetMesh2dBindGroup<1>,
-    SetColorUniformBindGroup<2, BackgroundConfig>,
+    // SetMesh2dBindGroup<1>,
+    SetColorUniformBindGroup<1, BackgroundConfig>,
     // Draw the mesh
     DrawMesh2d,
 );
@@ -237,6 +237,31 @@ struct UniformMeta<T> {
     pd: PhantomData<T>,
     buffer: Buffer,
     bind_group: Option<BindGroup>,
+}
+
+pub fn queue_mesh2d_view_bind_groups(
+    mut commands: Commands,
+    render_device: Res<RenderDevice>,
+    mesh2d_pipeline: Res<BackgroundMesh2dPipeline>,
+    view_uniforms: Res<ViewUniforms>,
+    views: Query<Entity, With<ExtractedView>>,
+) {
+    if let Some(view_binding) = view_uniforms.uniforms.binding() {
+        for entity in &views {
+            let view_bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+                entries: &[BindGroupEntry {
+                    binding: 0,
+                    resource: view_binding.clone(),
+                }],
+                label: Some("mesh2d_view_bind_group"),
+                layout: &mesh2d_pipeline.mesh2d_pipeline.view_layout,
+            });
+
+            commands.entity(entity).insert(Mesh2dViewBindGroup {
+                value: view_bind_group,
+            });
+        }
+    }
 }
 
 // create a bind group for the time uniform buffer
@@ -339,6 +364,7 @@ pub fn extract_colored_mesh2d(
     *previous_len = values.len();
     commands.insert_or_spawn_batch(values);
 }
+
 
 /// Queue the 2d meshes marked with [`ColoredMesh2d`] using our custom pipeline and draw function
 #[allow(clippy::too_many_arguments)]
