@@ -3,7 +3,7 @@
 use bevy::{
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
-    sprite::MaterialMesh2dBundle,
+    sprite::MaterialMesh2dBundle, window::WindowResized,
 };
 use mapbuilder::{self, background::BackgroundConfig};
 
@@ -16,8 +16,10 @@ struct Location {
     y: i32,
 }
 
+#[derive(Clone, Copy, Debug)]
 struct MapConfig {
     zoom: f32,
+
     width: f32,
     height: f32,
 
@@ -42,20 +44,31 @@ impl MapConfig {
         }
     }
 
+    pub fn set_zoom(&mut self, zoom: f32) {
+        let x = self.x / self.zoom;
+        let y = self.y / self.zoom;
+
+        self.zoom = zoom.max(10.);
+
+        self.x = x * self.zoom;
+        self.y = y * self.zoom;
+    }
+
     pub fn recalculate(&self) -> Option<Location> {
-        self.contains(self.mouse_x?, self.mouse_y?)
+        self.contains(
+            (self.mouse_x? - self.x) / self.zoom,
+            (self.mouse_y? - self.y) / self.zoom,
+        )
     }
 
     pub fn update_mouse(&mut self, x: f32, y: f32) -> Option<Location> {
-        self.mouse_x = Some(x);
-        self.mouse_y = Some(y);
+        self.mouse_x = Some(x - self.width * 0.5);
+        self.mouse_y = Some(y - self.height * 0.5);
 
-        self.contains(x, y)
+        self.recalculate()
     }
 
     fn contains(&self, x: f32, y: f32) -> Option<Location> {
-        let x = (x - self.width * 0.5 - self.x) / self.zoom;
-        let y = (y - self.height * 0.5 - self.y) / self.zoom;
         let dx = x.signum() * 0.5;
         let dy = y.signum() * 0.5;
         let out = Location {
@@ -66,13 +79,7 @@ impl MapConfig {
     }
 
     pub fn location_to_transform(&self, location: &Location, z: f32) -> Transform {
-        Transform::default()
-            .with_scale(Vec3::splat(self.zoom))
-            .with_translation(Vec3::new(
-                location.x as f32 * self.zoom,
-                location.y as f32 * self.zoom,
-                z,
-            ))
+        Transform::default().with_translation(Vec3::new(location.x as f32, location.y as f32, z))
     }
 }
 
@@ -85,6 +92,8 @@ fn main() {
         .add_system(transform_hover_planet)
         .add_system(mouse_events)
         .add_system(world_move)
+        .add_system(handle_window_resize)
+        .add_system(sync_config)
         .add_system(spawn_planet)
         .add_system(change_bg_color);
 
@@ -101,7 +110,9 @@ fn setup(
         let window = windows.get_primary().unwrap();
         (window.width(), window.height())
     };
-    commands.insert_resource(MapConfig::new(w, h));
+
+    let config = MapConfig::new(w, h);
+    commands.insert_resource(config);
 
     let mut color = Color::PURPLE;
     color.set_a(0.4);
@@ -115,7 +126,25 @@ fn setup(
         })
         .insert_bundle((HoverPlanet, Location { x: 0, y: 0 }));
 
-    commands.spawn_bundle(Camera2dBundle::default());
+    let transform = Transform::from_xyz(0.0, 0.0, 1000.0).with_scale(Vec3::new(
+        1. / config.zoom,
+        1. / config.zoom,
+        1.,
+    ));
+    commands.spawn_bundle(Camera2dBundle {
+        transform,
+        ..default()
+    });
+}
+
+fn handle_window_resize(
+    mut keyboard_input_events: EventReader<WindowResized>,
+    mut config: ResMut<MapConfig>,
+) {
+    for event in keyboard_input_events.iter() { 
+        config.width = event.width;
+        config.height = event.height;
+    }
 }
 
 fn transform_hover_planet(
@@ -133,6 +162,7 @@ fn mouse_events(
     mut config: ResMut<MapConfig>,
     mut cursor_moved_events: EventReader<CursorMoved>,
     mut mouse_wheel_events: EventReader<MouseWheel>,
+    mut cameras: Query<&mut Transform, With<Camera2d>>,
 ) {
     let mut loc = query.single_mut();
 
@@ -148,7 +178,13 @@ fn mouse_events(
         } else {
             1.
         };
-        config.zoom += event.y * amount;
+
+        let z = config.zoom;
+        config.set_zoom(z + event.y * amount);
+
+        for mut cam_trans in cameras.iter_mut() {
+            *cam_trans = cam_trans.with_scale(Vec3::new(1. / config.zoom, 1. / config.zoom, 1.));
+        }
 
         if let Some(l) = config.recalculate() {
             *loc = l;
@@ -156,30 +192,68 @@ fn mouse_events(
     }
 }
 
-fn world_move(mut config: ResMut<MapConfig>, time: Res<Time>, input: Res<Input<KeyCode>>) {
+fn world_move(
+    mut config: ResMut<MapConfig>,
+    time: Res<Time>,
+    input: Res<Input<KeyCode>>,
+    mut cameras: Query<&mut Transform, With<Camera2d>>,
+    mut location: Query<&mut Location, With<HoverPlanet>>,
+) {
+    let scale = 400.0;
+    let mut changed = false;
+    let delta = time.delta_seconds() * scale;
+
+    let mut translate = Vec3::ZERO;
+
     if input.pressed(KeyCode::W) {
-        config.y += time.delta_seconds() * 10.;
+        translate.y += delta;
+        changed = true;
     }
 
     if input.pressed(KeyCode::S) {
-        config.y -= time.delta_seconds() * 10.;
+        translate.y -= delta;
+        changed = true;
     }
 
     if input.pressed(KeyCode::D) {
-        config.x += time.delta_seconds() * 10.;
+        translate.x += delta;
+        changed = true;
     }
     if input.pressed(KeyCode::A) {
-        config.x -= time.delta_seconds() * 10.;
+        translate.x -= delta;
+        changed = true;
     }
+
+    if changed {
+        config.x -= translate.x;
+        config.y -= translate.y;
+        let mut loc = location.single_mut();
+
+        if let Some(l) = config.recalculate() {
+            *loc = l;
+        }
+
+        for mut cam_trans in cameras.iter_mut() {
+            *cam_trans = *cam_trans * Transform::from_translation(translate);
+        }
+    }
+}
+
+fn sync_config(config: Res<MapConfig>, mut bg_config: ResMut<BackgroundConfig>) {
+    bg_config.height = config.height;
+    bg_config.width = config.width;
+    bg_config.x = config.x;
+    bg_config.y = config.y;
+    bg_config.zoom = config.zoom;
 }
 
 fn change_bg_color(mut bg: ResMut<BackgroundConfig>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::A) {
-        bg.color = Color::BLUE;
+        bg.set_color(Color::BLUE);
     }
 
     if input.just_pressed(KeyCode::D) {
-        bg.color = Color::PURPLE;
+        bg.set_color(Color::PURPLE);
     }
 }
 
@@ -196,18 +270,19 @@ fn spawn_planet(
     if click.just_pressed(MouseButton::Left) {
         let transform = config.location_to_transform(loc, 0.);
 
-        commands.spawn_bundle(MaterialMesh2dBundle {
-            mesh: meshes
-                .add(Mesh::from(shape::Quad::new(Vec2::new(1., 1.))))
-                .into(),
-            material: materials.add(ColorMaterial::from(Color::WHITE)),
-            transform,
-            ..default()
-        }).insert(*loc);
+        commands
+            .spawn_bundle(MaterialMesh2dBundle {
+                mesh: meshes
+                    .add(Mesh::from(shape::Quad::new(Vec2::new(1., 1.))))
+                    .into(),
+                material: materials.add(ColorMaterial::from(Color::WHITE)),
+                transform,
+                ..default()
+            })
+            .insert(*loc);
     }
 
     if click.just_pressed(MouseButton::Right) {
-        println!("just clicked!");
         for entity in planets
             .iter()
             .filter(|(_, l)| l.x == loc.x && l.y == loc.y)

@@ -1,10 +1,9 @@
 use std::marker::PhantomData;
 
 use bevy::{
-    core::Pod,
+    core::{Pod, Zeroable},
     core_pipeline::core_2d::Transparent2d,
     ecs::system::{lifetimeless::SRes, SystemParamItem},
-    math::vec4,
     prelude::*,
     render::{
         extract_resource::{ExtractResource, ExtractResourcePlugin},
@@ -25,25 +24,19 @@ use bevy::{
         },
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
-        view::{VisibleEntities, ViewUniforms, ExtractedView},
+        view::VisibleEntities,
         Extract, RenderApp, RenderStage,
     },
     sprite::{
-        DrawMesh2d, Mesh2dHandle, Mesh2dPipeline, Mesh2dPipelineKey,
-        SetMesh2dViewBindGroup, Mesh2dViewBindGroup,
+        DrawMesh2d, Mesh2dHandle, Mesh2dPipelineKey,
     },
     utils::FloatOrd,
 };
 
 fn setup_background(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
-    // Let's define the mesh for the object we want to draw: a nice star.
-    // We will specify here what kind of topology is used to define the mesh,
-    // that is, how triangles are built from the vertices. We will use a
-    // triangle list, meaning that each vertex of the triangle has to be
-    // specified.
     let mut background = Mesh::new(PrimitiveTopology::TriangleList);
-    let mi = -0.8;
-    let ma = 0.8;
+    let mi = -1.;
+    let ma = 1.;
     let v_pos = vec![[mi, mi, 0.0], [mi, ma, 0.0], [ma, mi, 0.0], [ma, ma, 0.0]];
 
     background.insert_attribute(Mesh::ATTRIBUTE_POSITION, v_pos);
@@ -74,7 +67,6 @@ pub struct BackgroundMesh2d;
 /// Custom pipeline for 2d meshes with vertex colors
 pub struct BackgroundMesh2dPipeline {
     /// this pipeline wraps the standard [`Mesh2dPipeline`]
-    mesh2d_pipeline: Mesh2dPipeline,
     color_uniform_layout: BindGroupLayout,
 
     shader_handle: Handle<Shader>,
@@ -91,18 +83,19 @@ impl FromWorld for BackgroundMesh2dPipeline {
                 label: Some("background uniform bind group"),
                 entries: &[BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::FRAGMENT,
+                    visibility: ShaderStages::FRAGMENT | ShaderStages::VERTEX,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: BufferSize::new((std::mem::size_of::<f32>() * 4) as u64),
+                        min_binding_size: None,
+                        // min_binding_size: BufferSize::new(80u64),
+                        // min_binding_size: BufferSize::new((std::mem::size_of::<BackgroundConfig>()) as u64),
                     },
                     count: None,
                 }],
             });
 
         Self {
-            mesh2d_pipeline: Mesh2dPipeline::from_world(world),
             color_uniform_layout,
             shader_handle,
         }
@@ -146,8 +139,6 @@ impl SpecializedRenderPipeline for BackgroundMesh2dPipeline {
             }),
             // Use the two standard uniforms for 2d meshes
             layout: Some(vec![
-                // Bind group 0 is the view uniform
-                self.mesh2d_pipeline.view_layout.clone(),
                 // Bind group 1 is the mesh uniform
                 self.color_uniform_layout.clone(),
             ]),
@@ -176,27 +167,42 @@ type DrawBackgroundMesh2d = (
     // Set the pipeline
     SetItemPipeline,
     // Set the view uniform as bind group 0
-    SetMesh2dViewBindGroup<0>,
+    // SetMesh2dViewBindGroup<0>,
     // Set the mesh uniform as bind group 1
     // SetMesh2dBindGroup<1>,
-    SetColorUniformBindGroup<1, BackgroundConfig>,
+    SetColorUniformBindGroup<0, BackgroundConfig>,
     // Draw the mesh
     DrawMesh2d,
 );
 
+#[derive(Pod, Clone, Copy, Zeroable)]
+#[repr(C)]
 pub struct BackgroundConfig {
-    pub color: Color,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub zoom: f32,
+    pub color: Vec3,
+}
+
+impl BackgroundConfig {
+    pub fn set_color(&mut self, color: Color) {
+        self.color = Vec3::new(color.r(), color.g(), color.b());
+    }
 }
 
 impl Default for BackgroundConfig {
     fn default() -> Self {
-        Self { color: Color::BLUE }
+        Self {
+            x: 0.,
+            y: 0.,
+            width: 0.,
+            height: 0.,
+            zoom: 0.,
+            color: Vec3::new(1.0, 0.0, 0.0),
+        }
     }
-}
-
-#[derive(Default)]
-struct ExtractedColor {
-    color: Vec4,
 }
 
 trait GetPod {
@@ -205,22 +211,19 @@ trait GetPod {
     fn get(&self) -> Self::Inner;
 }
 
-impl GetPod for ExtractedColor {
-    type Inner = Vec4;
+impl GetPod for BackgroundConfig {
+    type Inner = BackgroundConfig;
 
     fn get(&self) -> Self::Inner {
-        self.color
+        *self
     }
 }
 
-impl ExtractResource for ExtractedColor {
+impl ExtractResource for BackgroundConfig {
     type Source = BackgroundConfig;
 
     fn extract_resource(unif: &Self::Source) -> Self {
-        let color = unif.color;
-        ExtractedColor {
-            color: vec4(color.r(), color.g(), color.b(), color.a()),
-        }
+        *unif
     }
 }
 
@@ -237,31 +240,6 @@ struct UniformMeta<T> {
     pd: PhantomData<T>,
     buffer: Buffer,
     bind_group: Option<BindGroup>,
-}
-
-pub fn queue_mesh2d_view_bind_groups(
-    mut commands: Commands,
-    render_device: Res<RenderDevice>,
-    mesh2d_pipeline: Res<BackgroundMesh2dPipeline>,
-    view_uniforms: Res<ViewUniforms>,
-    views: Query<Entity, With<ExtractedView>>,
-) {
-    if let Some(view_binding) = view_uniforms.uniforms.binding() {
-        for entity in &views {
-            let view_bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: view_binding.clone(),
-                }],
-                label: Some("mesh2d_view_bind_group"),
-                layout: &mesh2d_pipeline.mesh2d_pipeline.view_layout,
-            });
-
-            commands.entity(entity).insert(Mesh2dViewBindGroup {
-                value: view_bind_group,
-            });
-        }
-    }
 }
 
 // create a bind group for the time uniform buffer
@@ -307,20 +285,19 @@ pub struct BackgroundPlugin;
 impl Plugin for BackgroundPlugin {
     fn build(&self, app: &mut App) {
         // Load our custom shader
-        app.insert_resource::<BackgroundConfig>(BackgroundConfig {
-            color: Color::ORANGE_RED,
-        });
+        app.insert_resource::<BackgroundConfig>(BackgroundConfig::default());
         app.add_startup_system(setup_background);
 
         let render_device = app.world.resource::<RenderDevice>();
         let buffer = render_device.create_buffer(&BufferDescriptor {
-            label: Some("time uniform buffer"),
-            size: (std::mem::size_of::<f32>() * 4) as u64,
+            label: Some("background config uniform buffer"),
+            // size: 80u64,
+            size: (std::mem::size_of::<f32>() * 9) as u64,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        app.add_plugin(ExtractResourcePlugin::<ExtractedColor>::default());
+        app.add_plugin(ExtractResourcePlugin::<BackgroundConfig>::default());
 
         // Register our custom draw function and pipeline, and add our render systems
         let render_app = app.get_sub_app_mut(RenderApp).unwrap();
@@ -335,7 +312,7 @@ impl Plugin for BackgroundPlugin {
             .init_resource::<SpecializedRenderPipelines<BackgroundMesh2dPipeline>>()
             .add_system_to_stage(
                 RenderStage::Prepare,
-                prepare_uniform::<BackgroundConfig, ExtractedColor>,
+                prepare_uniform::<BackgroundConfig, BackgroundConfig>,
             )
             .add_system_to_stage(RenderStage::Extract, extract_colored_mesh2d)
             .add_system_to_stage(RenderStage::Queue, queue_colored_mesh2d)
@@ -364,7 +341,6 @@ pub fn extract_colored_mesh2d(
     *previous_len = values.len();
     commands.insert_or_spawn_batch(values);
 }
-
 
 /// Queue the 2d meshes marked with [`ColoredMesh2d`] using our custom pipeline and draw function
 #[allow(clippy::too_many_arguments)]

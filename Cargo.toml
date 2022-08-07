@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 bevy = { version = "0.8.0", features = ["dynamic"] }
 bevy_egui = "0.15.0"
+bytemuck = "1.11.0"
 egui = "0.18.1"
 
 [profile.dev]
