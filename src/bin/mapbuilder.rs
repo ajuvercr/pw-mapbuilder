@@ -3,7 +3,8 @@ use std::f32::consts::TAU;
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_egui::EguiPlugin;
 use mapbuilder::{
-    self, background::BackgroundConfig, input, map_config::MapConfig, HoverPlanet, Location,
+    self, background::BackgroundConfig, input, map_config::MapConfig, CurrentPlayer, HoverPlanet,
+    Location, HoveringUI,
 };
 
 fn main() {
@@ -40,10 +41,10 @@ fn fps(time: Res<Time>, mut cur: Local<f32>, mut frames: ResMut<FPS>) {
 mod ui {
     use std::f32::consts::TAU;
 
-    use bevy::{prelude::{Res, ResMut} };
+    use bevy::prelude::{Res, ResMut};
     use bevy_egui::{egui, EguiContext};
-    use egui::{vec2, Color32, Sense, Stroke, Ui, Vec2, Rounding, Pos2, Rect};
-    use mapbuilder::map_config::MapConfig;
+    use egui::{vec2, Color32, Pos2, Rect, Rounding, Sense, Stroke, Ui, Vec2};
+    use mapbuilder::{map_config::MapConfig, CurrentPlayer, HoveringUI};
 
     use crate::FPS;
 
@@ -51,38 +52,53 @@ mod ui {
         bevy::prelude::Color::rgba_u8(color.r(), color.g(), color.b(), color.a())
     }
 
-    fn color_option(ui: &mut Ui, color: Color32, size: Vec2) -> bool {
-        let (response, painter) = ui.allocate_painter(size, Sense::hover());
+    fn color_option(ui: &mut Ui, color: Color32, size: Vec2, active: bool) -> bool {
+        let (response, painter) = ui.allocate_painter(size, Sense::hover().union(Sense::click()));
 
         let rect = response.rect;
 
-        let stroke = if response.hovered() {
+        let stroke = if response.hovered() || active {
             Stroke::new(2., Color32::WHITE)
         } else {
             Stroke::new(1., Color32::GRAY)
         };
 
-        let rect = rect.shrink(5.); 
+        let rect = rect.shrink(5.);
         painter.rect_filled(rect, Rounding::none(), color);
         painter.rect_stroke(rect, Rounding::none(), stroke);
 
         response.clicked()
     }
 
-    pub fn ui_system(mut egui_context: ResMut<EguiContext>, fps: Res<FPS>, config: Res<MapConfig>) {
-        egui::TopBottomPanel::bottom("bottom_panel")
-            .resizable(true)
+    pub fn ui_system(
+        mut egui_context: ResMut<EguiContext>,
+        fps: Res<FPS>,
+        config: Res<MapConfig>,
+        mut player: ResMut<CurrentPlayer>,
+        mut hovering_ui: ResMut<HoveringUI>,
+    ) {
+        let hovered = egui::TopBottomPanel::bottom("bottom_panel")
             .show(egui_context.ctx_mut(), |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.label(format!("fps {}", fps.0));
                     ui.label(format!("zoom {}", config.zoom));
 
                     let size = Vec2::splat(32.0);
-                    for color in [Color32::RED, Color32::BLUE, Color32::YELLOW] {
-                        color_option(ui, color, size);
+                    for (i, color) in [Color32::GRAY, Color32::RED, Color32::BLUE, Color32::YELLOW]
+                        .into_iter()
+                        .enumerate()
+                    {
+                        if color_option(ui, color, size, i as u32 == player.id) {
+                            player.id = i as u32;
+                            player.color = color_to_color(color);
+                        }
                     }
-                });
-            });
+                })
+            })
+            .response
+            .hovered();
+
+        hovering_ui.0 = hovered;
     }
 }
 
@@ -98,8 +114,13 @@ fn setup(
     };
 
     let config = MapConfig::new(w, h);
+    commands.insert_resource(HoveringUI(false));
     commands.insert_resource(config);
     commands.insert_resource(FPS(0));
+    commands.insert_resource(CurrentPlayer {
+        id: 0,
+        color: Color::GRAY,
+    });
 
     let mut color = Color::PURPLE;
     color.set_a(0.4);
@@ -111,7 +132,7 @@ fn setup(
             material: materials.add(ColorMaterial::from(color)),
             ..default()
         })
-        .insert_bundle((HoverPlanet, Location { x: 0, y: 0 }));
+        .insert_bundle((HoverPlanet, Location { x: 0, y: 0, player: None }));
 
     let transform = Transform::from_xyz(0.0, 0.0, 1000.0).with_scale(Vec3::new(
         1. / config.zoom,

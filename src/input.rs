@@ -5,7 +5,7 @@ use bevy::{
     sprite::MaterialMesh2dBundle, window::WindowResized,
 };
 
-use crate::{map_config::MapConfig, Location, HoverPlanet, background::BackgroundConfig};
+use crate::{map_config::MapConfig, Location, HoverPlanet, background::BackgroundConfig, CurrentPlayer, HoveringUI};
 
 pub fn handle_window_resize(
     mut keyboard_input_events: EventReader<WindowResized>,
@@ -110,29 +110,38 @@ pub fn change_bg_color(mut bg: ResMut<BackgroundConfig>, input: Res<Input<KeyCod
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_planet(
     mut commands: Commands,
     click: Res<Input<MouseButton>>,
     location: Query<&Location, With<HoverPlanet>>,
     planets: Query<(Entity, &Location), Without<HoverPlanet>>,
     config: Res<MapConfig>,
+    current_player: Res<CurrentPlayer>,
+    hovering_ui: Res<HoveringUI>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
+    if hovering_ui.0 {
+        return;
+    }
+
     let loc = location.single();
     if click.just_pressed(MouseButton::Left) {
         let transform = config.location_to_transform(loc, 0.);
 
+        let mut location = *loc;
+        location.player = current_player.id.into();
         commands
             .spawn_bundle(MaterialMesh2dBundle {
                 mesh: meshes
                     .add(Mesh::from(shape::Quad::new(Vec2::new(1., 1.))))
                     .into(),
-                material: materials.add(ColorMaterial::from(Color::WHITE)),
+                material: materials.add(ColorMaterial::from(current_player.color)),
                 transform,
                 ..default()
             })
-            .insert(*loc);
+            .insert(location);
     }
 
     if click.just_pressed(MouseButton::Right) {
