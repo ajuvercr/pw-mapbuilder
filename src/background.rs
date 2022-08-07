@@ -16,7 +16,7 @@ use bevy::{
         render_resource::{
             BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
             BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BlendState, Buffer,
-            BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, ColorTargetState,
+            BufferBindingType, BufferDescriptor, BufferUsages, ColorTargetState,
             ColorWrites, Face, FragmentState, FrontFace, MultisampleState, PipelineCache,
             PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipelineDescriptor, ShaderStages,
             SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat,

@@ -31,7 +31,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
     out.clip_position = vec4<f32>(vertex.position, 1.0);
 
-    let ratio: f32 = config.width / config.height;
     let uv = vec2<f32>(vertex.position.x * config.width * 0.5 - config.x, vertex.position.y * config.height * 0.5 - config.y);
     out.position = vec2<f32>(uv / config.zoom);
     return out;
@@ -52,8 +51,11 @@ fn  plot(st: f32, pct: f32) -> f32{
 fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
     var  W: f32 = 0.1;
 
-    var frac: vec2<f32> = abs(fract(in.position + 0.5 + vec2(W)) - vec2(W) ); 
-    var is_border: f32 = min(frac.x, frac.y);
+    var frac: vec2<f32> =min( min( abs(fract(in.position + 0.5 + vec2(W)) - vec2(W) )
+    ,  abs(fract(in.position + 0.51 + vec2(W)) - vec2(W) )),
+      abs(fract(in.position + 0.49 + vec2(W)) - vec2(W) )); 
+
+    var is_border: f32 = min(frac.x, frac.y) ;
 
     var b = plot(is_border, 0.0);
     var bt = 1.0 - b;
