@@ -127,7 +127,7 @@ fn setup(
     commands
         .spawn_bundle(MaterialMesh2dBundle {
             mesh: meshes
-                .add(Mesh::from(shape::Quad::new(Vec2::new(1., 1.))))
+                .add(config.mesh())
                 .into(),
             material: materials.add(ColorMaterial::from(color)),
             ..default()

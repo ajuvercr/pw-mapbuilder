@@ -1,6 +1,7 @@
 use bevy::{
-    math::{Quat, Vec3},
-    prelude::Transform,
+    math::{Quat, Vec2, Vec3},
+    prelude::{shape, Mesh, Transform},
+    render::mesh::{Indices, PrimitiveTopology},
 };
 
 use crate::Location;
@@ -44,6 +45,33 @@ impl MapConfig {
         }
     }
 
+    pub fn mesh(&self) -> Mesh {
+        match self.ty {
+            MapType::Squares => Mesh::from(shape::Quad::new(Vec2::new(1., 1.))),
+            MapType::Triangles => {
+                let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+                mesh.insert_attribute(
+                    Mesh::ATTRIBUTE_POSITION,
+                    vec![
+                        [-0.5, -TRIAG_HEIGHT * 0.5, 0.0],
+                        [0.5, -TRIAG_HEIGHT * 0.5, 0.0],
+                        [0., TRIAG_HEIGHT * 0.5, 0.0],
+                    ],
+                );
+                mesh.insert_attribute(
+                    Mesh::ATTRIBUTE_NORMAL,
+                    vec![[0., 0., 1.], [0., 0., 1.], [0., 0., 1.]],
+                );
+                mesh.insert_attribute(
+                    Mesh::ATTRIBUTE_UV_0,
+                    vec![[0.0, 0.0], [1.0, 0.0], [0.5, TRIAG_HEIGHT]],
+                );
+                mesh.set_indices(Some(Indices::U32(vec![0, 1, 2])));
+                mesh
+            }
+        }
+    }
+
     pub fn set_zoom(&mut self, zoom: f32) {
         let x = self.x / self.zoom;
         let y = self.y / self.zoom;
@@ -81,17 +109,31 @@ impl MapConfig {
                 Some(out)
             }
             MapType::Triangles => {
+                let mut x = (x * 2.0) + 1.;
+                let y = y + TRIAG_HEIGHT * 0.5;
                 let p = 1.154_700_5; // tan(pi / 6) * 2    //  30 degrees
                 let row = (y / TRIAG_HEIGHT).floor();
-                let frac = y - row * TRIAG_HEIGHT;
+                let mut frac = y - row * TRIAG_HEIGHT;
+                if frac < 0. {
+                    frac += 1.0;
+                }
 
-                let triangle_bot_length = p * frac;
+                if row as i32 % 2 == 0 {
+                    x += 1.0;
+                }
 
-                let col_frac = x.fract();
-                let mut col = x.floor();
+                let mut col_frac = x.fract();
+                if col_frac < 0. {
+                    col_frac += 1.0;
+                }
+                let mut col = x.floor() as i32;
+                let mut triangle_bot_length = p * frac;
+                if col % 2 == 0 {
+                    triangle_bot_length = 1.0 - triangle_bot_length;
+                }
 
                 if col_frac < triangle_bot_length {
-                    col -= 1.;
+                    col -= 1;
                 }
 
                 Some(Location {
@@ -112,13 +154,18 @@ impl MapConfig {
             )),
             MapType::Triangles => {
                 let rot = if location.x % 2 == 0 {
-                    Quat::from_rotation_y(std::f32::consts::PI)
+                    Quat::from_rotation_z(std::f32::consts::PI)
                 } else {
                     Quat::default()
                 };
+                let dx = if location.y % 2 == 0 {
+                   - 1.
+                } else {
+                    0.
+                };
                 Transform::default()
                     .with_translation(Vec3::new(
-                        location.x as f32,
+                        (location.x as f32 + dx) * 0.5,
                         location.y as f32 * TRIAG_HEIGHT,
                         z,
                     ))
