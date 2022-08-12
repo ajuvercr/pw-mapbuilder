@@ -75,6 +75,7 @@ pub struct BackgroundMesh2dPipeline {
 impl FromWorld for BackgroundMesh2dPipeline {
     fn from_world(world: &mut World) -> Self {
         let asset_server = world.resource::<AssetServer>();
+        asset_server.watch_for_changes().unwrap();
         let shader_handle: Handle<Shader> = asset_server.load("shaders/background_shader.wgsl");
 
         let render_device = world.resource::<RenderDevice>();

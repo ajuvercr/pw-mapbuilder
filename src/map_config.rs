@@ -1,6 +1,6 @@
 use bevy::{
-    math::{Quat, Vec2, Vec3},
-    prelude::{shape, Mesh, Transform},
+    math::{vec3, Quat, Vec2, Vec3},
+    prelude::{shape, Mat4, Mesh, Transform},
     render::mesh::{Indices, PrimitiveTopology},
 };
 
@@ -52,11 +52,12 @@ impl MapConfig {
                 let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
                 mesh.insert_attribute(
                     Mesh::ATTRIBUTE_POSITION,
-                    vec![
-                        [-0.5, -TRIAG_HEIGHT * 0.5, 0.0],
-                        [0.5, -TRIAG_HEIGHT * 0.5, 0.0],
-                        [0., TRIAG_HEIGHT * 0.5, 0.0],
-                    ],
+                    // vec![
+                    //     [-0.5, -TRIAG_HEIGHT * 0.5, 0.0],
+                    //     [0.5, -TRIAG_HEIGHT * 0.5, 0.0],
+                    //     [0., TRIAG_HEIGHT * 0.5, 0.0],
+                    // ],
+                    vec![[-0.5, 0., 0.0], [0.5, 0., 0.0], [0., TRIAG_HEIGHT, 0.0]],
                 );
                 mesh.insert_attribute(
                     Mesh::ATTRIBUTE_NORMAL,
@@ -109,8 +110,8 @@ impl MapConfig {
                 Some(out)
             }
             MapType::Triangles => {
-                let mut x = (x * 2.0) + 1.;
-                let y = y + TRIAG_HEIGHT * 0.5;
+                let mut x = x * 2.0 + 1.;
+                let y = y;
                 let p = 1.154_700_5; // tan(pi / 6) * 2    //  30 degrees
                 let row = (y / TRIAG_HEIGHT).floor();
                 let mut frac = y - row * TRIAG_HEIGHT;
@@ -127,7 +128,7 @@ impl MapConfig {
                     col_frac += 1.0;
                 }
                 let mut col = x.floor() as i32;
-                let mut triangle_bot_length = p * frac;
+                let mut triangle_bot_length = 1. -  p * frac;
                 if col % 2 == 0 {
                     triangle_bot_length = 1.0 - triangle_bot_length;
                 }
@@ -153,23 +154,23 @@ impl MapConfig {
                 z,
             )),
             MapType::Triangles => {
-                let rot = if location.x % 2 == 0 {
-                    Quat::from_rotation_z(std::f32::consts::PI)
-                } else {
-                    Quat::default()
-                };
-                let dx = if location.y % 2 == 0 {
-                   - 1.
-                } else {
-                    0.
-                };
-                Transform::default()
-                    .with_translation(Vec3::new(
-                        (location.x as f32 + dx) * 0.5,
-                        location.y as f32 * TRIAG_HEIGHT,
-                        z,
-                    ))
-                    .with_rotation(rot)
+                let mut mat = Mat4::IDENTITY;
+
+                if location.x % 2 == 1 || location.x % 2 == -1 {
+                    mat = Mat4::from_translation(Vec3::new(0., TRIAG_HEIGHT * 0.5, 0.))
+                        * Mat4::from_rotation_z(std::f32::consts::PI)
+                        * Mat4::from_translation(Vec3::new(0., TRIAG_HEIGHT * -0.5, 0.))
+                        * mat;
+                }
+
+                let dx = if location.y % 2 == 0 { -1. } else { 0. };
+                mat = Mat4::from_translation(Vec3::new(
+                    (location.x as f32 + dx) * 0.5,
+                    location.y as f32 * TRIAG_HEIGHT,
+                    z,
+                )) * mat;
+
+                Transform::from_matrix(mat)
             }
         }
     }

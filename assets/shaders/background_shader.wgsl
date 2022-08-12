@@ -32,7 +32,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.clip_position = vec4<f32>(vertex.position, 1.0);
 
     let uv = vec2<f32>(vertex.position.x * config.width * 0.5 - config.x, vertex.position.y * config.height * 0.5 - config.y);
-    out.position = vec2<f32>(uv / config.zoom);
+    out.position = vec2<f32>(uv / config.zoom);// + vec2(0.5, 0.45);
     return out;
 }
 
@@ -47,18 +47,48 @@ fn  plot(st: f32, pct: f32) -> f32{
 }
 
 /// Entry point for the fragment shader
+/* @fragment */
+/* fn fragment(in: FragmentInput) -> @location(0) vec4<f32> { */
+/*     var  W: f32 = 0.1; */
+/**/
+/*     var frac: vec2<f32> =min( min( abs(fract(in.position + 0.5 + vec2(W)) - vec2(W) ) */
+/*     ,  abs(fract(in.position + 0.51 + vec2(W)) - vec2(W) )), */
+/*       abs(fract(in.position + 0.49 + vec2(W)) - vec2(W) ));  */
+/**/
+/*     var is_border: f32 = min(frac.x, frac.y) ; */
+/**/
+/*     var b = plot(is_border, 0.0); */
+/*     var bt = 1.0 - b; */
+/*     return b * vec4(config.cx,config.cy,config.cz, 1.0) + bt * vec4(0.0, 0.0, 0.0, 1.0); */
+/* } */
+
+fn rotate(input: vec2<f32>, a: f32) -> vec2<f32> {
+    var c = cos(a);
+    var s = sin(a);
+    return vec2(
+        c * input.x + s * input.y,
+        -s * input.x + c * input.y
+    );
+}
+
 @fragment
 fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
-    var  W: f32 = 0.1;
+    var fi = fract(in.position);
+    var t_height = 0.8660254;
 
-    var frac: vec2<f32> =min( min( abs(fract(in.position + 0.5 + vec2(W)) - vec2(W) )
-    ,  abs(fract(in.position + 0.51 + vec2(W)) - vec2(W) )),
-      abs(fract(in.position + 0.49 + vec2(W)) - vec2(W) )); 
+    var d1 = rotate(vec2(in.position.x, in.position.y), 60.0 * 3.141592 / 180.);
+    var d2 = rotate(vec2(in.position.x, in.position.y), 120.0 * 3.141592 / 180.);
+    var hor = abs(fract(in.position.y / t_height));
+    var d1_r = abs(fract(d1.y / t_height));
+    var d2_r = abs(fract(d2.y/ t_height));
 
-    var is_border: f32 = min(frac.x, frac.y) ;
+    var l = min(hor, min(d1_r, d2_r));
 
-    var b = plot(is_border, 0.0);
+
+    var b = plot(l, 0.0);
+
     var bt = 1.0 - b;
     return b * vec4(config.cx,config.cy,config.cz, 1.0) + bt * vec4(0.0, 0.0, 0.0, 1.0);
 }
+
 
