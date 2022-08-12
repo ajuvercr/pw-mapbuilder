@@ -5,7 +5,7 @@ use bevy::{
     sprite::MaterialMesh2dBundle, window::WindowResized,
 };
 
-use crate::{map_config::MapConfig, Location, HoverPlanet, background::BackgroundConfig, CurrentPlayer, HoveringUI};
+use crate::{map_config::{MapConfig, MapType}, Location, HoverPlanet, background::BackgroundConfig, CurrentPlayer, HoveringUI};
 
 pub fn handle_window_resize(
     mut keyboard_input_events: EventReader<WindowResized>,
@@ -100,14 +100,24 @@ pub fn world_move(
     }
 }
 
-pub fn change_bg_color(mut bg: ResMut<BackgroundConfig>, input: Res<Input<KeyCode>>) {
+pub fn change_bg_color(mut bg: ResMut<MapConfig>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::A) {
-        bg.set_color(Color::BLUE);
+        bg.bg_color = Color::BLUE;
     }
 
     if input.just_pressed(KeyCode::D) {
-        bg.set_color(Color::PURPLE);
+        bg.bg_color = Color::PURPLE;
     }
+
+    if input.just_pressed(KeyCode::Z) {
+        println!("tetten squares");
+        bg.ty = MapType::Squares; 
+    } 
+
+    if input.just_pressed(KeyCode::X) {
+        println!("tetten triangles");
+        bg.ty = MapType::Triangles; 
+    } 
 }
 
 #[allow(clippy::too_many_arguments)]

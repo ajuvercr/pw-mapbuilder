@@ -1,6 +1,6 @@
 use bevy::{
     math::{vec3, Quat, Vec2, Vec3},
-    prelude::{shape, Mat4, Mesh, Transform},
+    prelude::{shape, Mat4, Mesh, Transform, Color},
     render::mesh::{Indices, PrimitiveTopology},
 };
 
@@ -28,12 +28,14 @@ pub struct MapConfig {
 
     pub mouse_x: Option<f32>,
     pub mouse_y: Option<f32>,
+
+    pub bg_color: Color,
 }
 
 impl MapConfig {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
-            ty: MapType::Triangles,
+            ty: MapType::Squares,
             zoom: 100.,
             width,
             height,
@@ -42,6 +44,8 @@ impl MapConfig {
 
             mouse_x: None,
             mouse_y: None,
+
+            bg_color: Color::GRAY,
         }
     }
 

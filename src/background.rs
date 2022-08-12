@@ -16,24 +16,22 @@ use bevy::{
         render_resource::{
             BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
             BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BlendState, Buffer,
-            BufferBindingType, BufferDescriptor, BufferUsages, ColorTargetState,
-            ColorWrites, Face, FragmentState, FrontFace, MultisampleState, PipelineCache,
-            PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipelineDescriptor, ShaderStages,
-            SpecializedRenderPipeline, SpecializedRenderPipelines, TextureFormat,
-            VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+            BufferBindingType, BufferDescriptor, BufferUsages, ColorTargetState, ColorWrites, Face,
+            FragmentState, FrontFace, MultisampleState, PipelineCache, PolygonMode, PrimitiveState,
+            PrimitiveTopology, RenderPipelineDescriptor, ShaderStages, SpecializedRenderPipeline,
+            SpecializedRenderPipelines, TextureFormat, VertexBufferLayout, VertexFormat,
+            VertexState, VertexStepMode,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
         view::VisibleEntities,
         Extract, RenderApp, RenderStage,
     },
-    sprite::{
-        DrawMesh2d, Mesh2dHandle, Mesh2dPipelineKey,
-    },
+    sprite::{DrawMesh2d, Mesh2dHandle, Mesh2dPipelineKey},
     utils::FloatOrd,
 };
 
-use crate::map_config::{MapType, MapConfig};
+use crate::map_config::{MapConfig, MapType};
 
 fn setup_background(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     let mut background = Mesh::new(PrimitiveTopology::TriangleList);
@@ -83,8 +81,9 @@ impl FromWorld for BackgroundMesh2dPipeline {
         let asset_server = world.resource::<AssetServer>();
         asset_server.watch_for_changes().unwrap();
         let squares_handle: Handle<Shader> = asset_server.load("shaders/background_shader.sq.wgsl");
-        let triangles_handle: Handle<Shader> = asset_server.load("shaders/background_shader.tri.wgsl");
-        let shader_handle = squares_handle.clone_weak();
+        let triangles_handle: Handle<Shader> =
+            asset_server.load("shaders/background_shader.tri.wgsl");
+        let shader_handle = triangles_handle.clone_weak();
 
         let render_device = world.resource::<RenderDevice>();
         let color_uniform_layout =
@@ -109,7 +108,7 @@ impl FromWorld for BackgroundMesh2dPipeline {
             squares_handle,
             triangles_handle,
             shader_handle,
-            current_type: MapType::Squares,
+            current_type: MapType::Triangles,
         }
     }
 }
@@ -128,6 +127,8 @@ impl SpecializedRenderPipeline for BackgroundMesh2dPipeline {
 
         let vertex_layout =
             VertexBufferLayout::from_vertex_formats(VertexStepMode::Vertex, formats);
+
+        println!("specializing");
 
         RenderPipelineDescriptor {
             vertex: VertexState {
@@ -182,12 +183,12 @@ type DrawBackgroundMesh2d = (
     // SetMesh2dViewBindGroup<0>,
     // Set the mesh uniform as bind group 1
     // SetMesh2dBindGroup<1>,
-    SetColorUniformBindGroup<0, BackgroundConfig>,
+    SetColorUniformBindGroup<0, MapConfig>,
     // Draw the mesh
     DrawMesh2d,
 );
 
-#[derive(Pod, Clone, Copy, Zeroable)]
+#[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct BackgroundConfig {
     pub x: f32,
@@ -195,12 +196,14 @@ pub struct BackgroundConfig {
     pub width: f32,
     pub height: f32,
     pub zoom: f32,
-    pub color: Vec3,
+    pub color: Color,
+
+    pub map_type: MapType,
 }
 
 impl BackgroundConfig {
     pub fn set_color(&mut self, color: Color) {
-        self.color = Vec3::new(color.r(), color.g(), color.b());
+        self.color = color
     }
 }
 
@@ -212,7 +215,8 @@ impl Default for BackgroundConfig {
             width: 0.,
             height: 0.,
             zoom: 0.,
-            color: Vec3::new(1.0, 0.0, 0.0),
+            color: Color::BLACK,
+            map_type: MapType::Squares,
         }
     }
 }
@@ -224,18 +228,47 @@ trait GetPod {
 }
 
 impl GetPod for BackgroundConfig {
-    type Inner = BackgroundConfig;
+    type Inner = [f32; 8];
 
     fn get(&self) -> Self::Inner {
-        *self
+        [
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+            self.zoom,
+            self.color.r(),
+            self.color.g(),
+            self.color.b(),
+        ]
     }
 }
 
 impl ExtractResource for BackgroundConfig {
-    type Source = BackgroundConfig;
+    type Source = MapConfig;
 
-    fn extract_resource(unif: &Self::Source) -> Self {
-        *unif
+    fn extract_resource(inp: &Self::Source) -> Self {
+        let MapConfig {
+            x,
+            y,
+            zoom,
+            ty,
+            width,
+            height,
+            bg_color,
+            ..
+        } = *inp;
+
+        Self {
+            x,
+            y,
+            zoom,
+            width,
+            height,
+
+            color: bg_color,
+            map_type: ty,
+        }
     }
 }
 
@@ -258,21 +291,20 @@ struct UniformMeta<T> {
 fn queue_time_bind_group<T: Send + Sync + 'static>(
     render_device: Res<RenderDevice>,
     mut uniform_meta: ResMut<UniformMeta<T>>,
-    pipeline: ResMut<BackgroundMesh2dPipeline>,
-    map_config: Res<MapConfig>,
+    mut pipeline: ResMut<BackgroundMesh2dPipeline>,
+    map_config: Res<BackgroundConfig>,
 ) {
-    if pipeline.current_type != map_config.ty {
-        pipeline.current_type = map_config.ty;
+    if pipeline.current_type != map_config.map_type {
+        pipeline.current_type = map_config.map_type;
 
         match pipeline.current_type {
             MapType::Squares => {
                 pipeline.shader_handle = pipeline.squares_handle.clone_weak();
-            }, 
+            }
             MapType::Triangles => {
                 pipeline.shader_handle = pipeline.triangles_handle.clone_weak();
             }
         }
-
     }
 
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
@@ -311,8 +343,6 @@ pub struct BackgroundPlugin;
 
 impl Plugin for BackgroundPlugin {
     fn build(&self, app: &mut App) {
-        // Load our custom shader
-        app.insert_resource::<BackgroundConfig>(BackgroundConfig::default());
         app.add_startup_system(setup_background);
 
         let render_device = app.world.resource::<RenderDevice>();
@@ -331,7 +361,7 @@ impl Plugin for BackgroundPlugin {
         render_app
             .add_render_command::<Transparent2d, DrawBackgroundMesh2d>()
             .init_resource::<BackgroundMesh2dPipeline>()
-            .insert_resource(UniformMeta::<BackgroundConfig> {
+            .insert_resource(UniformMeta::<MapConfig> {
                 buffer,
                 pd: PhantomData,
                 bind_group: None,
@@ -339,14 +369,11 @@ impl Plugin for BackgroundPlugin {
             .init_resource::<SpecializedRenderPipelines<BackgroundMesh2dPipeline>>()
             .add_system_to_stage(
                 RenderStage::Prepare,
-                prepare_uniform::<BackgroundConfig, BackgroundConfig>,
+                prepare_uniform::<MapConfig, BackgroundConfig>,
             )
             .add_system_to_stage(RenderStage::Extract, extract_colored_mesh2d)
             .add_system_to_stage(RenderStage::Queue, queue_colored_mesh2d)
-            .add_system_to_stage(
-                RenderStage::Queue,
-                queue_time_bind_group::<BackgroundConfig>,
-            );
+            .add_system_to_stage(RenderStage::Queue, queue_time_bind_group::<MapConfig>);
     }
 }
 
@@ -384,6 +411,7 @@ pub fn queue_colored_mesh2d(
     if colored_mesh2d.is_empty() {
         return;
     }
+
     // Iterate each view (a camera is a view)
     for (visible_entities, mut transparent_phase) in &mut views {
         let draw_colored_mesh2d = transparent_draw_functions

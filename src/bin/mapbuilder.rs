@@ -21,8 +21,7 @@ fn main() {
         .add_system(input::spawn_planet)
         .add_system(input::change_bg_color)
         .add_system(ui::ui_system)
-        .add_system(fps)
-        .add_system(sync_config);
+        .add_system(fps);
 
     app.run();
 }
@@ -154,10 +153,3 @@ fn transform_hover_planet(
     }
 }
 
-fn sync_config(config: Res<MapConfig>, mut bg_config: ResMut<BackgroundConfig>) {
-    bg_config.height = config.height;
-    bg_config.width = config.width;
-    bg_config.x = config.x;
-    bg_config.y = config.y;
-    bg_config.zoom = config.zoom;
-}
