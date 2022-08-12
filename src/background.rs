@@ -33,6 +33,8 @@ use bevy::{
     utils::FloatOrd,
 };
 
+use crate::map_config::{MapType, MapConfig};
+
 fn setup_background(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     let mut background = Mesh::new(PrimitiveTopology::TriangleList);
     let mi = -1.;
@@ -69,14 +71,20 @@ pub struct BackgroundMesh2dPipeline {
     /// this pipeline wraps the standard [`Mesh2dPipeline`]
     color_uniform_layout: BindGroupLayout,
 
+    squares_handle: Handle<Shader>,
+    triangles_handle: Handle<Shader>,
+
     shader_handle: Handle<Shader>,
+    current_type: MapType,
 }
 
 impl FromWorld for BackgroundMesh2dPipeline {
     fn from_world(world: &mut World) -> Self {
         let asset_server = world.resource::<AssetServer>();
         asset_server.watch_for_changes().unwrap();
-        let shader_handle: Handle<Shader> = asset_server.load("shaders/background_shader.wgsl");
+        let squares_handle: Handle<Shader> = asset_server.load("shaders/background_shader.sq.wgsl");
+        let triangles_handle: Handle<Shader> = asset_server.load("shaders/background_shader.tri.wgsl");
+        let shader_handle = squares_handle.clone_weak();
 
         let render_device = world.resource::<RenderDevice>();
         let color_uniform_layout =
@@ -98,7 +106,10 @@ impl FromWorld for BackgroundMesh2dPipeline {
 
         Self {
             color_uniform_layout,
+            squares_handle,
+            triangles_handle,
             shader_handle,
+            current_type: MapType::Squares,
         }
     }
 }
@@ -247,8 +258,23 @@ struct UniformMeta<T> {
 fn queue_time_bind_group<T: Send + Sync + 'static>(
     render_device: Res<RenderDevice>,
     mut uniform_meta: ResMut<UniformMeta<T>>,
-    pipeline: Res<BackgroundMesh2dPipeline>,
+    pipeline: ResMut<BackgroundMesh2dPipeline>,
+    map_config: Res<MapConfig>,
 ) {
+    if pipeline.current_type != map_config.ty {
+        pipeline.current_type = map_config.ty;
+
+        match pipeline.current_type {
+            MapType::Squares => {
+                pipeline.shader_handle = pipeline.squares_handle.clone_weak();
+            }, 
+            MapType::Triangles => {
+                pipeline.shader_handle = pipeline.triangles_handle.clone_weak();
+            }
+        }
+
+    }
+
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
         label: None,
         layout: &pipeline.color_uniform_layout,

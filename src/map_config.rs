@@ -6,7 +6,7 @@ use bevy::{
 
 use crate::Location;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MapType {
     Squares,
     Triangles,
