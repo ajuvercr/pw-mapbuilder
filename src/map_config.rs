@@ -1,6 +1,6 @@
 use bevy::{
-    math::{vec3, Quat, Vec2, Vec3},
-    prelude::{shape, Mat4, Mesh, Transform, Color},
+    math::{Vec2, Vec3},
+    prelude::{shape, Color, Mat4, Mesh, Transform},
     render::mesh::{Indices, PrimitiveTopology},
 };
 
@@ -35,7 +35,7 @@ pub struct MapConfig {
 impl MapConfig {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
-            ty: MapType::Squares,
+            ty: MapType::Triangles,
             zoom: 100.,
             width,
             height,
@@ -132,7 +132,7 @@ impl MapConfig {
                     col_frac += 1.0;
                 }
                 let mut col = x.floor() as i32;
-                let mut triangle_bot_length = 1. -  p * frac;
+                let mut triangle_bot_length = 1. - p * frac;
                 if col % 2 == 0 {
                     triangle_bot_length = 1.0 - triangle_bot_length;
                 }

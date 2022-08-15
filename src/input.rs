@@ -1,17 +1,20 @@
-
 use bevy::{
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
-    sprite::MaterialMesh2dBundle, window::WindowResized,
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
+    window::WindowResized,
 };
 
-use crate::{map_config::{MapConfig, MapType}, Location, HoverPlanet, background::BackgroundConfig, CurrentPlayer, HoveringUI};
+use crate::{
+    map_config::{MapConfig, MapType},
+    CurrentPlayer, HoverPlanet, HoveringUI, Location,
+};
 
 pub fn handle_window_resize(
     mut keyboard_input_events: EventReader<WindowResized>,
     mut config: ResMut<MapConfig>,
 ) {
-    for event in keyboard_input_events.iter() { 
+    for event in keyboard_input_events.iter() {
         config.width = event.width;
         config.height = event.height;
     }
@@ -100,7 +103,17 @@ pub fn world_move(
     }
 }
 
-pub fn change_bg_color(mut bg: ResMut<MapConfig>, input: Res<Input<KeyCode>>) {
+pub fn change_bg_color(
+    mut bg: ResMut<MapConfig>,
+    input: Res<Input<KeyCode>>,
+    mut locations: Query<(
+        &mut Mesh2dHandle,
+        &mut Transform,
+        &Location,
+        Option<&HoverPlanet>,
+    )>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
     if input.just_pressed(KeyCode::A) {
         bg.bg_color = Color::BLUE;
     }
@@ -109,15 +122,28 @@ pub fn change_bg_color(mut bg: ResMut<MapConfig>, input: Res<Input<KeyCode>>) {
         bg.bg_color = Color::PURPLE;
     }
 
+    let mut update_meshes = false;
     if input.just_pressed(KeyCode::Z) {
         println!("tetten squares");
-        bg.ty = MapType::Squares; 
-    } 
+        bg.ty = MapType::Squares;
+        update_meshes = true;
+    }
 
     if input.just_pressed(KeyCode::X) {
         println!("tetten triangles");
-        bg.ty = MapType::Triangles; 
-    } 
+        bg.ty = MapType::Triangles;
+        update_meshes = true;
+    }
+
+    if update_meshes {
+        let mesh_handle: Mesh2dHandle = meshes.add(bg.mesh()).into();
+
+        for (mut l, mut t, loc, h) in locations.iter_mut() {
+            *l = mesh_handle.clone();
+            let z = if h.is_some() { 0.1 } else { 0.0 };
+            *t = bg.location_to_transform(loc, z);
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -144,9 +170,7 @@ pub fn spawn_planet(
         location.player = current_player.id.into();
         commands
             .spawn_bundle(MaterialMesh2dBundle {
-                mesh: meshes
-                    .add(config.mesh())
-                    .into(),
+                mesh: meshes.add(config.mesh()).into(),
                 material: materials.add(ColorMaterial::from(current_player.color)),
                 transform,
                 ..default()

@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 
 use bevy::{
-    core::{Pod, Zeroable},
+    asset::HandleId,
+    core::Pod,
     core_pipeline::core_2d::Transparent2d,
     ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
@@ -69,22 +70,11 @@ pub struct BackgroundMesh2dPipeline {
     /// this pipeline wraps the standard [`Mesh2dPipeline`]
     color_uniform_layout: BindGroupLayout,
 
-    squares_handle: Handle<Shader>,
-    triangles_handle: Handle<Shader>,
-
     shader_handle: Handle<Shader>,
-    current_type: MapType,
 }
 
-impl FromWorld for BackgroundMesh2dPipeline {
-    fn from_world(world: &mut World) -> Self {
-        let asset_server = world.resource::<AssetServer>();
-        asset_server.watch_for_changes().unwrap();
-        let squares_handle: Handle<Shader> = asset_server.load("shaders/background_shader.sq.wgsl");
-        let triangles_handle: Handle<Shader> =
-            asset_server.load("shaders/background_shader.tri.wgsl");
-        let shader_handle = triangles_handle.clone_weak();
-
+impl BackgroundMesh2dPipeline {
+    fn new(world: &mut World, shader_handle: Handle<Shader>) -> Self {
         let render_device = world.resource::<RenderDevice>();
         let color_uniform_layout =
             render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -105,10 +95,7 @@ impl FromWorld for BackgroundMesh2dPipeline {
 
         Self {
             color_uniform_layout,
-            squares_handle,
-            triangles_handle,
             shader_handle,
-            current_type: MapType::Triangles,
         }
     }
 }
@@ -127,8 +114,6 @@ impl SpecializedRenderPipeline for BackgroundMesh2dPipeline {
 
         let vertex_layout =
             VertexBufferLayout::from_vertex_formats(VertexStepMode::Vertex, formats);
-
-        println!("specializing");
 
         RenderPipelineDescriptor {
             vertex: VertexState {
@@ -291,21 +276,8 @@ struct UniformMeta<T> {
 fn queue_time_bind_group<T: Send + Sync + 'static>(
     render_device: Res<RenderDevice>,
     mut uniform_meta: ResMut<UniformMeta<T>>,
-    mut pipeline: ResMut<BackgroundMesh2dPipeline>,
-    map_config: Res<BackgroundConfig>,
+    pipeline: Res<BackgroundMesh2dPipeline>,
 ) {
-    if pipeline.current_type != map_config.map_type {
-        pipeline.current_type = map_config.map_type;
-
-        match pipeline.current_type {
-            MapType::Squares => {
-                pipeline.shader_handle = pipeline.squares_handle.clone_weak();
-            }
-            MapType::Triangles => {
-                pipeline.shader_handle = pipeline.triangles_handle.clone_weak();
-            }
-        }
-    }
 
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
         label: None,
@@ -339,11 +311,73 @@ impl<const I: usize, T: Send + Sync + 'static> EntityRenderCommand
     }
 }
 
+pub struct BGShader {
+    current: Handle<Shader>,
+    squares: (Option<Shader>, Handle<Shader>),
+    triangles: (Option<Shader>, Handle<Shader>),
+    current_type: Option<MapType>,
+}
+
+fn set_bg_shaders(
+    mut bg_shader: ResMut<BGShader>,
+    mut events: EventReader<AssetEvent<Shader>>,
+    assets: Res<Assets<Shader>>,
+) {
+    for event in events.iter() {
+        match event {
+            AssetEvent::Created { handle } | AssetEvent::Modified { handle } => {
+                if handle.id == bg_shader.squares.1.id {
+                    let shader = assets.get(handle).unwrap().clone();
+                    bg_shader.squares.0 = Some(shader);
+                }
+
+                if handle.id == bg_shader.triangles.1.id {
+                    let shader = assets.get(handle).unwrap().clone();
+                    bg_shader.triangles.0 = Some(shader);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn update_bg_current_shader(
+    mut bg_shader: ResMut<BGShader>,
+    config: Res<MapConfig>,
+    mut assets: ResMut<Assets<Shader>>,
+) {
+    let changed = if let Some(t) = bg_shader.current_type {
+        t != config.ty
+    } else {
+        true
+    };
+
+    if changed {
+        let success = match (config.ty, &bg_shader.squares, &bg_shader.triangles) {
+            (MapType::Squares, (Some(s), _), _) => {
+                assets.set_untracked(&bg_shader.current, s.clone());
+                true
+            }
+            (MapType::Triangles, _, (Some(s), _)) => {
+                assets.set_untracked(&bg_shader.current, s.clone());
+                true
+            }
+            _ => false,
+        };
+
+        if success {
+            bg_shader.current_type = Some(config.ty);
+        }
+    }
+}
+
 pub struct BackgroundPlugin;
 
 impl Plugin for BackgroundPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_background);
+        app.add_startup_system(setup_background)
+            .add_system(update_bg_current_shader)
+            .add_system(set_bg_shaders);
 
         let render_device = app.world.resource::<RenderDevice>();
         let buffer = render_device.create_buffer(&BufferDescriptor {
@@ -354,13 +388,35 @@ impl Plugin for BackgroundPlugin {
             mapped_at_creation: false,
         });
 
+        let bg_shader = {
+            let asset_server = app.world.resource::<AssetServer>();
+            asset_server.watch_for_changes().unwrap();
+            let squares: Handle<Shader> = asset_server.load("shaders/background_shader.sq.wgsl");
+            let triangles: Handle<Shader> = asset_server.load("shaders/background_shader.tri.wgsl");
+
+            let current = Handle::weak(HandleId::random::<Shader>());
+            BGShader {
+                current,
+                squares: (None, squares),
+                triangles: (None, triangles),
+                current_type: None,
+            }
+        };
+
+        let current = bg_shader.current.clone();
+        app.insert_resource(bg_shader);
+
         app.add_plugin(ExtractResourcePlugin::<BackgroundConfig>::default());
 
         // Register our custom draw function and pipeline, and add our render systems
         let render_app = app.get_sub_app_mut(RenderApp).unwrap();
+
+        let pipeline = BackgroundMesh2dPipeline::new(&mut render_app.world, current);
+
         render_app
             .add_render_command::<Transparent2d, DrawBackgroundMesh2d>()
-            .init_resource::<BackgroundMesh2dPipeline>()
+            .insert_resource(pipeline)
+            // .init_resource::<BackgroundMesh2dPipeline>()
             .insert_resource(UniformMeta::<MapConfig> {
                 buffer,
                 pd: PhantomData,

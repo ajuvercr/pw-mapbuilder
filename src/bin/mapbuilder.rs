@@ -1,9 +1,8 @@
-use std::f32::consts::TAU;
 
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_egui::EguiPlugin;
 use mapbuilder::{
-    self, background::BackgroundConfig, input, map_config::MapConfig, CurrentPlayer, HoverPlanet,
+    self, input, map_config::MapConfig, CurrentPlayer, HoverPlanet,
     Location, HoveringUI,
 };
 
@@ -38,11 +37,9 @@ fn fps(time: Res<Time>, mut cur: Local<f32>, mut frames: ResMut<FPS>) {
 }
 
 mod ui {
-    use std::f32::consts::TAU;
-
     use bevy::prelude::{Res, ResMut};
     use bevy_egui::{egui, EguiContext};
-    use egui::{vec2, Color32, Pos2, Rect, Rounding, Sense, Stroke, Ui, Vec2};
+    use egui::{Color32, Rounding, Sense, Stroke, Ui, Vec2};
     use mapbuilder::{map_config::MapConfig, CurrentPlayer, HoveringUI};
 
     use crate::FPS;
