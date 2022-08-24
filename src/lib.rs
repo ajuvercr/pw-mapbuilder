@@ -19,6 +19,10 @@ pub struct CurrentPlayer {
 pub struct Location {
     pub x: i32,
     pub y: i32,
+}
 
-    pub player: Option<u32>,
+#[derive(Component, Clone, Debug, Default)]
+pub struct PlanetData {
+    pub player: u32,
+    pub name: String,
 }

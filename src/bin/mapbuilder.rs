@@ -56,6 +56,8 @@ fn main() {
         .insert_resource(ExampleMode::ApplicationWithRedraw)
         .add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
+        .add_system(ui::ui_system)
+        .add_system(ui::ui_editor)
         .add_plugin(mapbuilder::background::BackgroundPlugin)
         .add_startup_system(setup)
         .add_system(transform_hover_planet)
@@ -64,7 +66,6 @@ fn main() {
         .add_system(input::handle_window_resize)
         .add_system(input::spawn_planet)
         .add_system(input::change_bg_color)
-        .add_system(ui::ui_system)
         .add_system(fps)
         .add_system(update_winit);
 
@@ -83,10 +84,14 @@ fn fps(time: Res<Time>, mut cur: Local<f32>, mut frames: ResMut<FPS>) {
 }
 
 mod ui {
-    use bevy::prelude::{Res, ResMut};
+    use std::ops::DerefMut;
+
+    use bevy::prelude::{Query, Res, ResMut, Without};
     use bevy_egui::{egui, EguiContext};
     use egui::{Color32, Rounding, Sense, Stroke, Ui, Vec2};
-    use mapbuilder::{map_config::MapConfig, CurrentPlayer, HoveringUI};
+    use mapbuilder::{
+        map_config::MapConfig, CurrentPlayer, HoverPlanet, HoveringUI, Location, PlanetData,
+    };
 
     use crate::FPS;
 
@@ -112,6 +117,42 @@ mod ui {
         response.clicked()
     }
 
+    pub fn ui_editor(
+        mut egui_context: ResMut<EguiContext>,
+        mut query: Query<(&Location, &mut PlanetData), Without<HoverPlanet>>,
+        mut hovering_ui: ResMut<HoveringUI>,
+    ) {
+        hovering_ui.0 = false;
+        let resp = egui::SidePanel::right("right_panel")
+            .resizable(true)
+            .show(egui_context.ctx_mut(), |ui| {
+                for (l, mut player) in query.iter_mut() {
+                    let PlanetData { ref player, ref mut name} = player.deref_mut();
+
+                    ui.horizontal(|ui| {
+                        ui.label("planet:");
+                        ui.add_sized(ui.available_size(), egui::TextEdit::singleline(name));
+                    });
+
+                    ui.label(format!("x: {} y: {}", l.x, l.y));
+                    color_option(ui, COLORS[*player as usize], Vec2::splat(32.), false);
+                    ui.separator();
+                }
+            })
+            .response;
+        hovering_ui.0 = hovering_ui.0 || resp.hovered();
+    }
+
+    const COLORS: [Color32; 7] = [
+        Color32::GRAY,
+        Color32::RED,
+        Color32::BLUE,
+        Color32::YELLOW,
+        Color32::GOLD,
+        Color32::KHAKI,
+        Color32::DEBUG_COLOR,
+    ];
+
     pub fn ui_system(
         mut egui_context: ResMut<EguiContext>,
         fps: Res<FPS>,
@@ -119,17 +160,14 @@ mod ui {
         mut player: ResMut<CurrentPlayer>,
         mut hovering_ui: ResMut<HoveringUI>,
     ) {
-        let hovered = egui::TopBottomPanel::bottom("bottom_panel")
+        let resp = egui::TopBottomPanel::bottom("bottom_panel")
             .show(egui_context.ctx_mut(), |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.label(format!("fps {}", fps.0));
                     ui.label(format!("zoom {}", config.zoom));
 
                     let size = Vec2::splat(32.0);
-                    for (i, color) in [Color32::GRAY, Color32::RED, Color32::BLUE, Color32::YELLOW]
-                        .into_iter()
-                        .enumerate()
-                    {
+                    for (i, color) in COLORS.into_iter().enumerate() {
                         if color_option(ui, color, size, i as u32 == player.id) {
                             player.id = i as u32;
                             player.color = color_to_color(color);
@@ -137,10 +175,9 @@ mod ui {
                     }
                 })
             })
-            .response
-            .hovered();
+            .response;
 
-        hovering_ui.0 = hovered;
+        hovering_ui.0 = hovering_ui.0 || resp.hovered();
     }
 }
 
@@ -172,14 +209,7 @@ fn setup(
             material: materials.add(ColorMaterial::from(color)),
             ..default()
         })
-        .insert_bundle((
-            HoverPlanet,
-            Location {
-                x: 0,
-                y: 0,
-                player: None,
-            },
-        ));
+        .insert_bundle((HoverPlanet, Location { x: 0, y: 0 }));
 
     let transform = Transform::from_xyz(0.0, 0.0, 1000.0).with_scale(Vec3::new(
         1. / config.zoom,

@@ -109,7 +109,6 @@ impl MapConfig {
                 let out = Location {
                     x: (x + dx) as i32,
                     y: (y + dy) as i32,
-                    player: None,
                 };
                 Some(out)
             }
@@ -144,7 +143,6 @@ impl MapConfig {
                 Some(Location {
                     x: col as i32,
                     y: row as i32,
-                    player: None,
                 })
             }
         }

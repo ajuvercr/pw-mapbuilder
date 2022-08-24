@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::{
     map_config::{MapConfig, MapType},
-    CurrentPlayer, HoverPlanet, HoveringUI, Location,
+    CurrentPlayer, HoverPlanet, HoveringUI, Location, PlanetData,
 };
 
 pub fn handle_window_resize(
@@ -165,9 +165,12 @@ pub fn spawn_planet(
     let loc = location.single();
     if click.just_pressed(MouseButton::Left) {
         let transform = config.location_to_transform(loc, 0.);
+        let planet_data = PlanetData {
+            player: current_player.id,
+            name: "tetten".into(),
+        };
 
         let mut location = *loc;
-        location.player = current_player.id.into();
         commands
             .spawn_bundle(MaterialMesh2dBundle {
                 mesh: meshes.add(config.mesh()).into(),
@@ -175,7 +178,8 @@ pub fn spawn_planet(
                 transform,
                 ..default()
             })
-            .insert(location);
+            .insert(location)
+            .insert(planet_data);
     }
 
     if click.just_pressed(MouseButton::Right) {
