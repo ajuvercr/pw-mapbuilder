@@ -27,7 +27,12 @@ pub fn mouse_events(
     mut cursor_moved_events: EventReader<CursorMoved>,
     mut mouse_wheel_events: EventReader<MouseWheel>,
     mut cameras: Query<&mut Transform, With<Camera2d>>,
+    hovering_ui: Res<HoveringUI>,
 ) {
+    if hovering_ui.0 {
+        return;
+    }
+
     let mut loc = query.single_mut();
 
     for event in cursor_moved_events.iter() {
@@ -44,6 +49,7 @@ pub fn mouse_events(
         };
 
         let z = config.zoom;
+
         config.set_zoom(z + event.y * amount);
 
         for mut cam_trans in cameras.iter_mut() {
@@ -124,13 +130,11 @@ pub fn change_bg_color(
 
     let mut update_meshes = false;
     if input.just_pressed(KeyCode::Z) {
-        println!("tetten squares");
         bg.ty = MapType::Squares;
         update_meshes = true;
     }
 
     if input.just_pressed(KeyCode::X) {
-        println!("tetten triangles");
         bg.ty = MapType::Triangles;
         update_meshes = true;
     }

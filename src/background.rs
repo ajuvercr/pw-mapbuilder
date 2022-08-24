@@ -278,7 +278,6 @@ fn queue_time_bind_group<T: Send + Sync + 'static>(
     mut uniform_meta: ResMut<UniformMeta<T>>,
     pipeline: Res<BackgroundMesh2dPipeline>,
 ) {
-
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
         label: None,
         layout: &pipeline.color_uniform_layout,
