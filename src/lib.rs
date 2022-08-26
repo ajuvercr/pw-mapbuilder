@@ -1,8 +1,9 @@
-use bevy::prelude::{Color, Component};
+use bevy::{prelude::{Color, Component, Res, Local, ResMut}, time::Time};
 
 pub mod background;
 pub mod input;
 pub mod map_config;
+pub mod ui;
 
 pub struct HoveringUI(pub bool);
 
@@ -26,3 +27,15 @@ pub struct PlanetData {
     pub player: u32,
     pub name: String,
 }
+
+pub struct FPS(pub u32);
+
+pub fn fps(time: Res<Time>, mut cur: Local<f32>, mut frames: ResMut<FPS>) {
+    *cur += time.delta_seconds();
+
+    if *cur > 0.1 {
+        frames.0 = (1. / time.delta_seconds()) as u32;
+        *cur = 0.;
+    }
+}
+

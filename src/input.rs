@@ -174,7 +174,7 @@ pub fn spawn_planet(
             name: "tetten".into(),
         };
 
-        let mut location = *loc;
+        let location = *loc;
         commands
             .spawn_bundle(MaterialMesh2dBundle {
                 mesh: meshes.add(config.mesh()).into(),
