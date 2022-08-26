@@ -1,15 +1,12 @@
-
 use std::{hash::Hash, ops::DerefMut};
 
+use crate::{map_config::MapConfig, CurrentPlayer, HoverPlanet, HoveringUI, Location, PlanetData};
 use bevy::{
     prelude::{Assets, Changed, Handle, Query, Res, ResMut, Without},
     sprite::ColorMaterial,
 };
 use bevy_egui::{egui, EguiContext};
 use egui::{Color32, Response, Rounding, Sense, Stroke, Ui, Vec2, Widget, WidgetWithState};
-use crate::{
-    map_config::MapConfig, CurrentPlayer, HoverPlanet, HoveringUI, Location, PlanetData,
-};
 
 use crate::FPS;
 
@@ -18,16 +15,9 @@ pub struct CollapsableState {
     open: bool,
 }
 
-pub enum CollapseAction {
-    Toggle,
-    Open,
-    Close,
-    None,
-}
-
 pub struct Collapsable<H, U> {
     header: H,
-    inner: U,
+    content: U,
     id: egui::Id,
 }
 
@@ -36,18 +26,18 @@ impl<H, U> WidgetWithState for Collapsable<H, U> {
 }
 
 impl<H, U> Collapsable<H, U> {
-    pub fn opened(header: H, inner: U, name: impl Hash) -> Self {
+    pub fn opened(header: H, content: U, name: impl Hash) -> Self {
         Self {
             header,
-            inner,
+            content,
             id: egui::Id::new(name),
         }
     }
 
-    pub fn closed(header: H, inner: U, name: impl Hash) -> Self {
+    pub fn closed(header: H, content: U, name: impl Hash) -> Self {
         Self {
             header,
-            inner,
+            content,
             id: egui::Id::new(name),
         }
     }
@@ -55,41 +45,21 @@ impl<H, U> Collapsable<H, U> {
 
 impl<H, U> Widget for Collapsable<H, U>
 where
-    U: Widget,
-    H: FnMut(&mut egui::Ui) -> (Response, CollapseAction),
+    U: FnOnce(&mut egui::Ui, &mut bool) -> Response,
+    H: FnOnce(&mut egui::Ui, &mut bool) -> Response,
 {
-    fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
-        let (response, state) = (self.header)(ui);
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        let state = ui.ctx().data().get_persisted(self.id);
+        let mut state_mut = state.map(|x: CollapsableState| x.open).unwrap_or_default();
+        let mut response = (self.header)(ui, &mut state_mut);
 
-        let (data, save): (CollapsableState, bool) = match state {
-            CollapseAction::Open => (CollapsableState { open: true }, true),
-            CollapseAction::Close => (CollapsableState { open: false }, true),
-            CollapseAction::Toggle => {
-                let data: Option<CollapsableState> = ui.ctx().data().get_persisted(self.id);
-                (
-                    CollapsableState {
-                        open: !data.map(|x| x.open).unwrap_or_default(),
-                    },
-                    true,
-                )
-            }
-            CollapseAction::None => {
-                let data: Option<CollapsableState> = ui.ctx().data().get_persisted(self.id);
-                (
-                    CollapsableState {
-                        open: data.map(|x| x.open).unwrap_or_default(),
-                    },
-                    false,
-                )
-            }
-        };
-
-        if save {
-            ui.ctx().data().insert_persisted(self.id, data);
+        if state_mut {
+            response |= (self.content)(ui, &mut state_mut);
         }
 
-        if data.open {
-            return self.inner.ui(ui) | response;
+        if state_mut != state.map(|x: CollapsableState| x.open).unwrap_or_default() {
+            let data = CollapsableState { open: state_mut };
+            ui.ctx().data().insert_persisted(self.id, data);
         }
 
         response
@@ -142,22 +112,23 @@ pub fn ui_editor(
                     ui.label(format!("x: {} y: {}", l.x, l.y));
                     let pn = *player;
                     ui.add(Collapsable::closed(
-                        |ui: &mut egui::Ui| {
+                        |ui: &mut egui::Ui, open: &mut bool| {
                             let resp =
                                 color_option(ui, COLORS[pn as usize], Vec2::splat(32.), false);
-                            let action = if resp.clicked() {
-                                CollapseAction::Toggle
-                            } else {
-                                CollapseAction::None
+
+                            if resp.clicked() {
+                                *open = !*open;
                             };
-                            (resp, action)
+
+                            resp
                         },
-                        move |ui: &mut egui::Ui| {
+                        move |ui: &mut egui::Ui, open: &mut bool| {
                             ui.horizontal_wrapped(move |ui| {
                                 let size = Vec2::splat(32.0);
                                 for (i, color) in COLORS.into_iter().enumerate() {
                                     if color_option(ui, color, size, false).clicked() {
                                         *player = i as u32;
+                                        *open = false;
                                     }
                                 }
                             })
