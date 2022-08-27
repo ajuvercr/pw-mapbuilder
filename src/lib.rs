@@ -1,4 +1,7 @@
-use bevy::{prelude::{Color, Component, Res, Local, ResMut}, time::Time};
+use bevy::{
+    prelude::{Color, Component, Local, Res, ResMut, Plugin},
+    time::Time,
+};
 
 pub mod background;
 pub mod input;
@@ -39,3 +42,13 @@ pub fn fps(time: Res<Time>, mut cur: Local<f32>, mut frames: ResMut<FPS>) {
     }
 }
 
+pub struct LibPlugin;
+
+impl Plugin for LibPlugin {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        use rnglib::{Language,RNG};
+        app.insert_resource(RNG::new(&Language::Curse).unwrap());
+        app.insert_resource(FPS(0));
+        app.add_system(fps);
+    }
+}

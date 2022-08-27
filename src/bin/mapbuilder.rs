@@ -55,6 +55,7 @@ fn main() {
         .insert_resource(ExampleMode::ApplicationWithRedraw)
         .add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
+        .add_plugin(mapbuilder::LibPlugin)
         .add_system(ui::ui_system)
         .add_system(ui::ui_editor)
         .add_system(ui::change_planet_color)
@@ -66,7 +67,6 @@ fn main() {
         .add_system(input::handle_window_resize)
         .add_system(input::spawn_planet)
         .add_system(input::change_bg_color)
-        .add_system(mapbuilder::fps)
         .add_system(update_winit);
 
     app.run();
@@ -86,7 +86,6 @@ fn setup(
     let config = MapConfig::new(w, h);
     commands.insert_resource(HoveringUI(false));
     commands.insert_resource(config);
-    commands.insert_resource(FPS(0));
     commands.insert_resource(CurrentPlayer {
         id: 0,
         color: Color::GRAY,

@@ -11,6 +11,7 @@ bevy = { version = "0.8.0", features = ["dynamic"] }
 bevy_egui = "0.15.0"
 bytemuck = "1.11.0"
 egui = "0.18.1"
+random_name_generator = "0.1.2"
 
 [profile.dev]
 opt-level = 1

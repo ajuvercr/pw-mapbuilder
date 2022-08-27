@@ -126,7 +126,7 @@ pub fn ui_editor(
                             ui.horizontal_wrapped(move |ui| {
                                 let size = Vec2::splat(32.0);
                                 for (i, color) in COLORS.into_iter().enumerate() {
-                                    if color_option(ui, color, size, false).clicked() {
+                                    if color_option(ui, color, size, *player == i as u32).clicked() {
                                         *player = i as u32;
                                         *open = false;
                                     }

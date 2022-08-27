@@ -5,6 +5,8 @@ use bevy::{
     window::WindowResized,
 };
 
+use rnglib::RNG;
+
 use crate::{
     map_config::{MapConfig, MapType},
     CurrentPlayer, HoverPlanet, HoveringUI, Location, PlanetData,
@@ -161,6 +163,7 @@ pub fn spawn_planet(
     hovering_ui: Res<HoveringUI>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    generator: Res<RNG>,
 ) {
     if hovering_ui.0 {
         return;
@@ -171,7 +174,7 @@ pub fn spawn_planet(
         let transform = config.location_to_transform(loc, 0.);
         let planet_data = PlanetData {
             player: current_player.id,
-            name: "tetten".into(),
+            name: generator.generate_name(),
         };
 
         let location = *loc;
