@@ -1,60 +1,68 @@
-use std::{hash::Hash, ops::DerefMut};
+use std::hash::Hash;
 
-use crate::{map_config::MapConfig, CurrentPlayer, HoverPlanet, HoveringUI, Location, PlanetData};
-use bevy::{
-    prelude::{Assets, Changed, Handle, Query, Res, ResMut, Without},
-    sprite::ColorMaterial,
-};
+use crate::{map_config::MapConfig, HoverPlanet, HoveringUI, Location, PlanetData, planet::{COLORS, PlanetEvent, Player}};
+use bevy::prelude::{Query, Res, ResMut, Without, EventWriter, Entity, Plugin};
 use bevy_egui::{egui, EguiContext};
 use egui::{Color32, Response, Rounding, Sense, Stroke, Ui, Vec2, Widget, WidgetWithState};
 
 use crate::FPS;
+
+
+pub struct UIPlugin;
+impl Plugin for UIPlugin {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        app.add_system(ui_editor).add_system(ui_system);
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct CollapsableState {
     open: bool,
 }
 
-pub struct Collapsable<H, U> {
+pub struct Collapsable<H, U, S> {
     header: H,
     content: U,
     id: egui::Id,
+    state: S,
 }
 
-impl<H, U> WidgetWithState for Collapsable<H, U> {
+impl<H, U, S> WidgetWithState for Collapsable<H, U, S> {
     type State = CollapsableState;
 }
 
-impl<H, U> Collapsable<H, U> {
-    pub fn opened(header: H, content: U, name: impl Hash) -> Self {
+impl<H, U, S> Collapsable<H, U, S> {
+    pub fn opened(header: H, content: U, state: S, name: impl Hash) -> Self {
         Self {
             header,
             content,
+            state,
             id: egui::Id::new(name),
         }
     }
 
-    pub fn closed(header: H, content: U, name: impl Hash) -> Self {
+    pub fn closed(header: H, content: U, state: S, name: impl Hash) -> Self {
         Self {
             header,
             content,
+            state,
             id: egui::Id::new(name),
         }
     }
 }
 
-impl<H, U> Widget for Collapsable<H, U>
+impl<H, U, S> Widget for Collapsable<H, U, S>
 where
-    U: FnOnce(&mut egui::Ui, &mut bool) -> Response,
-    H: FnOnce(&mut egui::Ui, &mut bool) -> Response,
+    U: FnOnce(&mut egui::Ui, &mut bool, &mut S) -> Response,
+    H: FnOnce(&mut egui::Ui, &mut bool, &mut S) -> Response,
 {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+    fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
         let state = ui.ctx().data().get_persisted(self.id);
         let mut state_mut = state.map(|x: CollapsableState| x.open).unwrap_or_default();
-        let mut response = (self.header)(ui, &mut state_mut);
+        let mut response = (self.header)(ui, &mut state_mut, &mut self.state);
 
         if state_mut {
-            response |= (self.content)(ui, &mut state_mut);
+            response |= (self.content)(ui, &mut state_mut, &mut self.state);
         }
 
         if state_mut != state.map(|x: CollapsableState| x.open).unwrap_or_default() {
@@ -66,9 +74,6 @@ where
     }
 }
 
-fn color_to_color(color: Color32) -> bevy::prelude::Color {
-    bevy::prelude::Color::rgba_u8(color.r(), color.g(), color.b(), color.a())
-}
 
 fn color_option(ui: &mut Ui, color: Color32, size: Vec2, active: bool) -> Response {
     let (response, painter) = ui.allocate_painter(size, Sense::hover().union(Sense::click()));
@@ -90,31 +95,41 @@ fn color_option(ui: &mut Ui, color: Color32, size: Vec2, active: bool) -> Respon
 
 pub fn ui_editor(
     mut egui_context: ResMut<EguiContext>,
-    mut query: Query<(&Location, &mut PlanetData), Without<HoverPlanet>>,
+    query: Query<(&Location, &PlanetData, Entity), Without<HoverPlanet>>,
     mut hovering_ui: ResMut<HoveringUI>,
+    mut planet_events: EventWriter<PlanetEvent>,
 ) {
     hovering_ui.0 = false;
     let resp = egui::SidePanel::right("right_panel")
         .resizable(true)
         .show(egui_context.ctx_mut(), |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for (i, (l, mut player)) in query.iter_mut().enumerate() {
+
+                for (i, (l, player, e)) in query.iter().enumerate() {
                     let PlanetData {
-                        ref mut player,
-                        ref mut name,
-                    } = player.deref_mut();
+                        ref player,
+                        ref name,
+                    } = player;
+
+                    let mut name = name.clone();
 
                     ui.horizontal(|ui| {
                         ui.label("planet:");
-                        ui.add_sized(ui.available_size(), egui::TextEdit::singleline(name));
+                        let resp = ui.add_sized(ui.available_size(), egui::TextEdit::singleline(&mut name));
+                        if resp.changed() {
+                            planet_events.send(PlanetEvent::SetName {
+                                id: e,
+                                name,
+                            });
+                        }
                     });
 
                     ui.label(format!("x: {} y: {}", l.x, l.y));
                     let pn = *player;
-                    ui.add(Collapsable::closed(
-                        |ui: &mut egui::Ui, open: &mut bool| {
+                    ui.add(Collapsable::<_, _, &mut EventWriter<PlanetEvent>>::closed(
+                        |ui: &mut egui::Ui, open: &mut bool, _: &mut &mut EventWriter<PlanetEvent>| {
                             let resp =
-                                color_option(ui, COLORS[pn as usize], Vec2::splat(32.), false);
+                                color_option(ui, COLORS[pn.0], Vec2::splat(32.), false);
 
                             if resp.clicked() {
                                 *open = !*open;
@@ -122,18 +137,22 @@ pub fn ui_editor(
 
                             resp
                         },
-                        move |ui: &mut egui::Ui, open: &mut bool| {
+                        |ui: &mut egui::Ui, open: &mut bool, pe: &mut &mut EventWriter<PlanetEvent>| {
                             ui.horizontal_wrapped(move |ui| {
                                 let size = Vec2::splat(32.0);
                                 for (i, color) in COLORS.into_iter().enumerate() {
-                                    if color_option(ui, color, size, *player == i as u32).clicked() {
-                                        *player = i as u32;
+                                    if color_option(ui, color, size, player.0 == i).clicked() {
+                                        pe.send(PlanetEvent::SetPlayer {
+                                            id: e,
+                                            player: Player(i)
+                                        });
                                         *open = false;
                                     }
                                 }
                             })
                             .response
                         },
+                        &mut planet_events,
                         i,
                     ));
                     ui.separator();
@@ -144,21 +163,12 @@ pub fn ui_editor(
     hovering_ui.0 = hovering_ui.0 || resp.hovered();
 }
 
-const COLORS: [Color32; 7] = [
-    Color32::GRAY,
-    Color32::RED,
-    Color32::BLUE,
-    Color32::YELLOW,
-    Color32::GOLD,
-    Color32::KHAKI,
-    Color32::DEBUG_COLOR,
-];
 
 pub fn ui_system(
     mut egui_context: ResMut<EguiContext>,
     fps: Res<FPS>,
     config: Res<MapConfig>,
-    mut player: ResMut<CurrentPlayer>,
+    mut player: ResMut<Player>,
     mut hovering_ui: ResMut<HoveringUI>,
 ) {
     let resp = egui::TopBottomPanel::bottom("bottom_panel")
@@ -169,9 +179,8 @@ pub fn ui_system(
 
                 let size = Vec2::splat(32.0);
                 for (i, color) in COLORS.into_iter().enumerate() {
-                    if color_option(ui, color, size, i as u32 == player.id).clicked() {
-                        player.id = i as u32;
-                        player.color = color_to_color(color);
+                    if color_option(ui, color, size, i == player.0).clicked() {
+                        player.0 = i ;
                     }
                 }
             })
@@ -181,14 +190,3 @@ pub fn ui_system(
     hovering_ui.0 = hovering_ui.0 || resp.hovered();
 }
 
-pub fn change_planet_color(
-    planets: Query<(&Handle<ColorMaterial>, &PlanetData), Changed<PlanetData>>,
-    mut meshes: ResMut<Assets<ColorMaterial>>,
-) {
-    for (h, d) in planets.into_iter() {
-        meshes.set_untracked(
-            h,
-            ColorMaterial::from(color_to_color(COLORS[d.player as usize])),
-        );
-    }
-}

@@ -1,75 +1,35 @@
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle, window::RequestRedraw, winit::WinitSettings};
+use bevy::{prelude::*, sprite::MaterialMesh2dBundle, window::PresentMode};
 use bevy_egui::EguiPlugin;
+use bevy_framepace::{FramepaceSettings, Limiter};
 use mapbuilder::{
-    self, input, map_config::MapConfig, ui, CurrentPlayer, HoverPlanet, HoveringUI, Location, FPS,
+    self, input, map_config::MapConfig, planet::PlanetPlugin, ui::UIPlugin, CurrentPlayer,
+    HoverPlanet, HoveringUI, Location,
 };
-
-#[allow(dead_code)]
-#[derive(Debug)]
-enum ExampleMode {
-    Game,
-    Application,
-    ApplicationWithRedraw,
-}
-
-/// Update winit based on the current `ExampleMode`
-fn update_winit(
-    mode: Res<ExampleMode>,
-    mut event: EventWriter<RequestRedraw>,
-    mut winit_config: ResMut<WinitSettings>,
-) {
-    use ExampleMode::*;
-    *winit_config = match *mode {
-        Game => {
-            // In the default `WinitConfig::game()` mode:
-            //   * When focused: the event loop runs as fast as possible
-            //   * When not focused: the event loop runs as fast as possible
-            WinitSettings::game()
-        }
-        Application => {
-            // While in `WinitConfig::desktop_app()` mode:
-            //   * When focused: the app will update any time a winit event (e.g. the window is
-            //     moved/resized, the mouse moves, a button is pressed, etc.), a [`RequestRedraw`]
-            //     event is received, or after 5 seconds if the app has not updated.
-            //   * When not focused: the app will update when the window is directly interacted with
-            //     (e.g. the mouse hovers over a visible part of the out of focus window), a
-            //     [`RequestRedraw`] event is received, or one minute has passed without the app
-            //     updating.
-            WinitSettings::desktop_app()
-        }
-        ApplicationWithRedraw => {
-            // Sending a `RequestRedraw` event is useful when you want the app to update the next
-            // frame regardless of any user input. For example, your application might use
-            // `WinitConfig::desktop_app()` to reduce power use, but UI animations need to play even
-            // when there are no inputs, so you send redraw requests while the animation is playing.
-            event.send(RequestRedraw);
-            WinitSettings::desktop_app()
-        }
-    };
-}
 
 fn main() {
     let mut app = App::new();
 
-    app.insert_resource(WinitSettings::desktop_app())
-        .insert_resource(ExampleMode::ApplicationWithRedraw)
-        .add_plugins(DefaultPlugins)
-        .add_plugin(EguiPlugin)
-        .add_plugin(mapbuilder::LibPlugin)
-        .add_system(ui::ui_system)
-        .add_system(ui::ui_editor)
-        .add_system(ui::change_planet_color)
-        .add_plugin(mapbuilder::background::BackgroundPlugin)
-        .add_startup_system(setup)
-        .add_system(transform_hover_planet)
-        .add_system(input::mouse_events)
-        .add_system(input::world_move)
-        .add_system(input::handle_window_resize)
-        .add_system(input::spawn_planet)
-        .add_system(input::change_bg_color)
-        .add_system(update_winit);
+    app.insert_resource(WindowDescriptor {
+        present_mode: PresentMode::AutoNoVsync,
+        ..default()
+    })
+    .add_plugins(DefaultPlugins)
+    .add_plugin(EguiPlugin)
+    .add_plugin(bevy_framepace::FramepacePlugin)
+    .add_plugin(mapbuilder::LibPlugin)
+    .add_plugin(UIPlugin)
+    .add_plugin(input::InputPlugin)
+    .add_plugin(PlanetPlugin)
+    .add_plugin(mapbuilder::background::BackgroundPlugin)
+    .add_startup_system(setup)
+    .add_startup_system(setup_framepace_settings)
+    .add_system(transform_hover_planet);
 
     app.run();
+}
+
+fn setup_framepace_settings(mut settings: ResMut<FramepaceSettings>) {
+    settings.limiter = Limiter::from_framerate(120.);
 }
 
 fn setup(

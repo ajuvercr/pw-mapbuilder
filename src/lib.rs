@@ -1,11 +1,13 @@
 use bevy::{
-    prelude::{Color, Component, Local, Res, ResMut, Plugin},
+    prelude::{Color, Component, Local, Plugin, Res, ResMut},
     time::Time,
 };
+use planet::Player;
 
 pub mod background;
 pub mod input;
 pub mod map_config;
+pub mod planet;
 pub mod ui;
 
 pub struct HoveringUI(pub bool);
@@ -15,19 +17,19 @@ pub struct HoverPlanet;
 
 #[derive(Debug, Default)]
 pub struct CurrentPlayer {
-    pub id: u32,
+    pub id: usize,
     pub color: Color,
 }
 
-#[derive(Component, Clone, Copy, Debug, Default)]
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Location {
     pub x: i32,
     pub y: i32,
 }
 
-#[derive(Component, Clone, Debug, Default)]
+#[derive(Component, Clone, Debug)]
 pub struct PlanetData {
-    pub player: u32,
+    pub player: Player,
     pub name: String,
 }
 
@@ -46,7 +48,7 @@ pub struct LibPlugin;
 
 impl Plugin for LibPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        use rnglib::{Language,RNG};
+        use rnglib::{Language, RNG};
         app.insert_resource(RNG::new(&Language::Curse).unwrap());
         app.insert_resource(FPS(0));
         app.add_system(fps);

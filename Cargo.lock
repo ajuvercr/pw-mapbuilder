@@ -425,6 +425,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_framepace"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "327027bd161a95a03962d03ba4cf71013a8d2500bf288838f6046278806cb383"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "bevy_gilrs"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2141,6 +2150,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_egui",
+ "bevy_framepace",
  "bytemuck",
  "egui",
  "random_name_generator",
