@@ -6,7 +6,7 @@ use bevy::{
 };
 
 use crate::{
-    map_config::{MapConfig, MapType},
+    map_config::{MapConfig, MapType, MapEvent},
     planet::{PlanetEvent, Player},
     HoverPlanet, HoveringUI, Location,
 };
@@ -126,47 +126,27 @@ pub fn world_move(
 }
 
 pub fn change_bg_color(
-    mut bg: ResMut<MapConfig>,
     input: Res<Input<KeyCode>>,
     hovering_ui: Res<HoveringUI>,
-    mut locations: Query<(
-        &mut Mesh2dHandle,
-        &mut Transform,
-        &Location,
-        Option<&HoverPlanet>,
-    )>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    mut writer: EventWriter<MapEvent>,
 ) {
     if hovering_ui.0 {
         return;
     }
     if input.just_pressed(KeyCode::A) {
-        bg.bg_color = Color::BLUE;
+        writer.send(MapEvent::SetColor(Color::BLUE));
     }
 
     if input.just_pressed(KeyCode::D) {
-        bg.bg_color = Color::PURPLE;
+        writer.send(MapEvent::SetColor(Color::PURPLE));
     }
 
-    let mut update_meshes = false;
     if input.just_pressed(KeyCode::Z) {
-        bg.ty = MapType::Squares;
-        update_meshes = true;
+        writer.send(MapEvent::SetType(MapType::Squares));
     }
 
     if input.just_pressed(KeyCode::X) {
-        bg.ty = MapType::Triangles;
-        update_meshes = true;
-    }
-
-    if update_meshes {
-        let mesh_handle: Mesh2dHandle = meshes.add(bg.mesh()).into();
-
-        for (mut l, mut t, loc, h) in locations.iter_mut() {
-            *l = mesh_handle.clone();
-            let z = if h.is_some() { 0.1 } else { 0.0 };
-            *t = bg.location_to_transform(loc, z);
-        }
+        writer.send(MapEvent::SetType(MapType::Triangles));
     }
 }
 

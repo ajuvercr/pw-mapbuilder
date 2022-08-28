@@ -1,10 +1,70 @@
 use bevy::{
     math::{Vec2, Vec3},
-    prelude::{shape, Color, Mat4, Mesh, Transform},
+    prelude::*,
     render::mesh::{Indices, PrimitiveTopology},
+    sprite::Mesh2dHandle,
 };
 
-use crate::Location;
+use crate::{HoverPlanet, Location};
+
+pub enum MapEvent {
+    SetColor(Color),
+    SetType(MapType),
+}
+
+pub struct MapConfigPlugin;
+impl Plugin for MapConfigPlugin {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        app.add_startup_system(setup_config)
+            .add_event::<MapEvent>().insert_resource(MapConfig::new(0., 0.))
+            .add_system(handle_map_events);
+    }
+}
+
+fn setup_config(windows: Res<Windows>, mut config: ResMut<MapConfig>) {
+    let (w, h) = {
+        let window = windows.get_primary().unwrap();
+        (window.width(), window.height())
+    };
+    config.width = w;
+    config.height = h;
+}
+
+fn handle_map_events(
+    mut reader: EventReader<MapEvent>,
+    mut config: ResMut<MapConfig>,
+
+    mut locations: Query<(
+        &mut Mesh2dHandle,
+        &mut Transform,
+        &Location,
+        Option<&HoverPlanet>,
+    )>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let mut update_meshes = false;
+    for event in reader.iter() {
+        match event {
+            MapEvent::SetType(ty) => {
+                config.ty = *ty;
+                update_meshes = true;
+            }
+            MapEvent::SetColor(color) => {
+                config.bg_color = *color;
+            }
+        }
+    }
+
+    if update_meshes {
+        let mesh_handle: Mesh2dHandle = meshes.add(config.mesh()).into();
+
+        for (mut l, mut t, loc, h) in locations.iter_mut() {
+            *l = mesh_handle.clone();
+            let z = if h.is_some() { 0.1 } else { 0.0 };
+            *t = config.location_to_transform(loc, z);
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MapType {

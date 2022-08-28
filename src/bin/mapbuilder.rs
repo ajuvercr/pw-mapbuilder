@@ -2,7 +2,7 @@ use bevy::{prelude::*, sprite::MaterialMesh2dBundle, window::PresentMode};
 use bevy_egui::EguiPlugin;
 use bevy_framepace::{FramepaceSettings, Limiter};
 use mapbuilder::{
-    self, input, map_config::MapConfig, planet::PlanetPlugin, ui::UIPlugin, CurrentPlayer,
+    self, input, map_config::{MapConfig, MapConfigPlugin}, planet::PlanetPlugin, ui::UIPlugin, CurrentPlayer,
     HoverPlanet, HoveringUI, Location,
 };
 
@@ -20,6 +20,7 @@ fn main() {
     .add_plugin(UIPlugin)
     .add_plugin(input::InputPlugin)
     .add_plugin(PlanetPlugin)
+    .add_plugin(MapConfigPlugin)
     .add_plugin(mapbuilder::background::BackgroundPlugin)
     .add_startup_system(setup)
     .add_startup_system(setup_framepace_settings)
@@ -36,21 +37,8 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    windows: Res<Windows>,
+    config: Res<MapConfig>,
 ) {
-    let (w, h) = {
-        let window = windows.get_primary().unwrap();
-        (window.width(), window.height())
-    };
-
-    let config = MapConfig::new(w, h);
-    commands.insert_resource(HoveringUI(false));
-    commands.insert_resource(config);
-    commands.insert_resource(CurrentPlayer {
-        id: 0,
-        color: Color::GRAY,
-    });
-
     let mut color = Color::PURPLE;
     color.set_a(0.4);
     commands

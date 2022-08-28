@@ -2,6 +2,7 @@ use bevy::{
     prelude::{Color, Component, Local, Plugin, Res, ResMut},
     time::Time,
 };
+use egui::Color32;
 use planet::Player;
 
 pub mod background;
@@ -54,3 +55,6 @@ impl Plugin for LibPlugin {
         app.add_system(fps);
     }
 }
+
+pub const ZEUS: Color32 = Color32::from_rgb(255, 128, 0);
+
