@@ -46,33 +46,6 @@ fn load_images(
     icons.handles.push(tri);
 }
 
-// fn set_images(
-//     mut icons: ResMut<Icons>,
-//     mut events: EventReader<AssetEvent<Image>>,
-//     mut ctx: ResMut<EguiContext>,
-//     assets: Res<Assets<Image>>,
-// ) {
-//     for event in events.iter() {
-//         match event {
-//             AssetEvent::Created { handle } | AssetEvent::Modified { handle } => {
-//                 if handle.id == icons.triangles.1.id {
-//                     let image = assets.get(handle).unwrap();
-//                     let size = image.size();
-//                     let color = ColorImage::from_rgba_unmultiplied([size.x as usize, size.y as usize], &image.data);
-//
-//                     let handle = ctx.add_image(handle)("traingles", color.into());
-//
-//                 }
-//
-//                 if handle.id == icons.squares.1.id {
-//                     icons.squares.0 = assets.get(handle).cloned();
-//                 }
-//             }
-//             _ => {}
-//         }
-//     }
-// }
-
 #[derive(Clone, Copy)]
 pub struct CollapsableState {
     open: bool,
@@ -260,47 +233,56 @@ fn ui_system(
     mut writer: EventWriter<MapEvent>,
 ) {
     let resp = egui::TopBottomPanel::bottom("bottom_panel")
+        // .default_height(70.)
         .show(egui_context.ctx_mut(), |ui| {
-            ui.horizontal_centered(|ui| {
-                ui.label(format!("fps {}", fps.0));
-                ui.label(format!("zoom {}", config.zoom));
+            let response = ui.allocate_response(
+                ui.available_size_before_wrap(),
+                egui::Sense::hover(),
+            );
+            hovering_ui.0 = hovering_ui.0 || response.hovered();
 
-                let size = Vec2::splat(32.0);
-                for (i, color) in COLORS.into_iter().enumerate() {
-                    if color_option(ui, color, size, i == player.0).clicked() {
-                        player.0 = i;
+            ui.allocate_ui_at_rect(response.rect, |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.label(format!("fps {}", fps.0));
+                    ui.label(format!("zoom {}", config.zoom));
+
+                    let size = Vec2::splat(32.0);
+                    for (i, color) in COLORS.into_iter().enumerate() {
+                        if color_option(ui, color, size, i == player.0).clicked() {
+                            player.0 = i;
+                        }
                     }
-                }
 
-                ui.separator();
+                    ui.separator();
 
-                if ui
-                    .add(IconButton {
-                        id: icons.triangles,
-                        selected: config.ty == MapType::Triangles,
-                    })
-                    .clicked()
-                    && config.ty != MapType::Triangles
-                {
-                    writer.send(MapEvent::SetType(MapType::Triangles));
-                    println!("seting triangles");
-                }
+                    if ui
+                        .add(IconButton {
+                            id: icons.triangles,
+                            selected: config.ty == MapType::Triangles,
+                        })
+                        .clicked()
+                        && config.ty != MapType::Triangles
+                    {
+                        writer.send(MapEvent::SetType(MapType::Triangles));
+                        println!("seting triangles");
+                    }
 
-                if ui
-                    .add(IconButton {
-                        id: icons.squares,
-                        selected: config.ty == MapType::Squares,
-                    })
-                    .clicked()
-                    && config.ty != MapType::Squares
-                {
-                    writer.send(MapEvent::SetType(MapType::Squares));
-                }
+                    if ui
+                        .add(IconButton {
+                            id: icons.squares,
+                            selected: config.ty == MapType::Squares,
+                        })
+                        .clicked()
+                        && config.ty != MapType::Squares
+                    {
+                        writer.send(MapEvent::SetType(MapType::Squares));
+                    }
 
-                ui.separator();
+                    ui.separator();
+                })
             })
         })
         .response;
 
-    hovering_ui.0 = hovering_ui.0 || resp.hovered();
+    // hovering_ui.0 = hovering_ui.0 || resp.hovered();
 }
