@@ -1,14 +1,13 @@
 use bevy::{
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
-    sprite::Mesh2dHandle,
     window::WindowResized,
 };
 
 use crate::{
-    map_config::{MapConfig, MapType, MapEvent},
-    planet::{PlanetEvent, Player},
-    HoverPlanet, HoveringUI, Location,
+    map_config::{MapConfig, MapEvent, MapType},
+    planet::{HoverPlanet, Location, PlanetEvent, Player},
+    HoveringUI,
 };
 
 pub struct InputPlugin;
@@ -152,6 +151,7 @@ pub fn change_bg_color(
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_planet(
+    commands: Commands,
     click: Res<Input<MouseButton>>,
     location: Query<&Location, With<HoverPlanet>>,
     planets: Query<(Entity, &Location), Without<HoverPlanet>>,

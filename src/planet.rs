@@ -5,7 +5,7 @@ use bevy::{
 use egui::Color32;
 use rnglib::RNG;
 
-use crate::{map_config::MapConfig, Location, PlanetData};
+use crate::map_config::MapConfig;
 
 pub const COLORS: [Color32; 7] = [
     Color32::GRAY,
@@ -27,6 +27,7 @@ impl Plugin for PlanetPlugin {
     }
 }
 
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Player(pub usize);
 
@@ -40,6 +41,25 @@ impl Player {
         COLORS[self.0]
     }
 }
+
+
+#[derive(Component, Clone, Debug)]
+pub struct PlanetData {
+    pub player: Player,
+    pub name: String,
+}
+
+#[derive(Component, Debug, Default)]
+pub struct HoverPlanet;
+
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Location {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Component, Clone, Debug)]
+pub struct Selected;
 
 pub enum PlanetEvent {
     Create { loc: Location, player: Player },

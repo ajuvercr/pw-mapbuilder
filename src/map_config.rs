@@ -5,7 +5,7 @@ use bevy::{
     sprite::Mesh2dHandle,
 };
 
-use crate::{HoverPlanet, Location};
+use crate::planet::{HoverPlanet, Location};
 
 pub enum MapEvent {
     SetColor(Color),

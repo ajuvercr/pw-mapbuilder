@@ -2,8 +2,10 @@ use bevy::{prelude::*, sprite::MaterialMesh2dBundle, window::PresentMode};
 use bevy_egui::EguiPlugin;
 use bevy_framepace::{FramepaceSettings, Limiter};
 use mapbuilder::{
-    self, input, map_config::{MapConfig, MapConfigPlugin}, planet::PlanetPlugin, ui::UIPlugin, CurrentPlayer,
-    HoverPlanet, HoveringUI, Location,
+    self, input,
+    map_config::{MapConfig, MapConfigPlugin},
+    planet::{PlanetPlugin, HoverPlanet, Location},
+    ui::UIPlugin,
 };
 
 fn main() {

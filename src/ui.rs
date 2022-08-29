@@ -2,14 +2,14 @@ use std::hash::Hash;
 
 use crate::{
     map_config::{MapConfig, MapEvent, MapType},
-    planet::{PlanetEvent, Player, COLORS},
-    HoverPlanet, HoveringUI, Location, PlanetData, ZEUS,
+    planet::{HoverPlanet, Location, PlanetData, PlanetEvent, Player, COLORS},
+    HoveringUI, ZEUS,
 };
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
 use egui::{
-    pos2, widgets, Color32, ColorImage, FontImage, ImageButton, ImageData, Rect, Response,
-    Rounding, Sense, Shape, Stroke, TextureHandle, TextureId, Ui, Vec2, Widget, WidgetWithState,
+    pos2, Color32, Rect, Response, Rounding, Sense, Shape, Stroke, TextureId, Ui, Vec2, Widget,
+    WidgetWithState,
 };
 
 use crate::FPS;
@@ -158,6 +158,7 @@ pub fn ui_editor(
 ) {
     hovering_ui.0 = false;
     let resp = egui::SidePanel::right("right_panel")
+        .min_width(250.)
         .resizable(true)
         .show(egui_context.ctx_mut(), |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -227,7 +228,7 @@ struct IconButton {
 
 impl Widget for IconButton {
     fn ui(self, ui: &mut Ui) -> Response {
-        let sense = Sense::hover().union(Sense::click());
+        let sense = Sense::click_and_drag();
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
         let (rect, response) = ui.allocate_exact_size(Vec2::splat(32.0), sense);
         if self.selected {
