@@ -2,14 +2,14 @@ use std::hash::Hash;
 
 use crate::{
     map_config::{MapConfig, MapEvent, MapType},
-    planet::{HoverPlanet, Location, PlanetData, PlanetEvent, Player, COLORS},
+    planet::{HoverPlanet, Location, PlanetData, PlanetEvent, Player, Selected, COLORS},
     HoveringUI, ZEUS,
 };
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
 use egui::{
-    pos2, Color32, Rect, Response, Rounding, Sense, Shape, Stroke, TextureId, Ui, Vec2, Widget,
-    WidgetWithState,
+    pos2, Color32, Rect, Response, RichText, Rounding, Sense, Shape, Stroke, TextureId, Ui, Vec2,
+    Widget, WidgetWithState,
 };
 
 use crate::FPS;
@@ -105,6 +105,67 @@ where
     }
 }
 
+struct PlanetWidget<'a, 'w, 's> {
+    i: usize,
+    data: &'a PlanetData,
+    loc: &'a Location,
+    entity: Entity,
+    events: &'a mut EventWriter<'w, 's, PlanetEvent>,
+}
+
+impl<'a, 'w, 's> Widget for PlanetWidget<'a, 'w, 's> {
+    fn ui(mut self, ui: &mut Ui) -> Response {
+        let PlanetData {
+            ref player,
+            ref name,
+        } = self.data;
+
+        let mut name = name.clone();
+        ui.horizontal(|ui| {
+            ui.label("planet:");
+            let resp = ui.add_sized(ui.available_size(), egui::TextEdit::singleline(&mut name));
+            if resp.changed() {
+                self.events.send(PlanetEvent::SetName {
+                    id: self.entity,
+                    name,
+                });
+            }
+        });
+
+        ui.label(format!("x: {} y: {}", self.loc.x, self.loc.y));
+
+        let pn = *player;
+        ui.add(Collapsable::<_, _, &mut EventWriter<PlanetEvent>>::closed(
+            |ui: &mut egui::Ui, open: &mut bool, _: &mut &mut EventWriter<PlanetEvent>| {
+                let resp = color_option(ui, COLORS[pn.0], Vec2::splat(32.), false);
+
+                if resp.clicked() {
+                    *open = !*open;
+                };
+
+                resp
+            },
+            |ui: &mut egui::Ui, open: &mut bool, pe: &mut &mut EventWriter<PlanetEvent>| {
+                ui.horizontal_wrapped(move |ui| {
+                    let size = Vec2::splat(32.0);
+                    for (i, color) in COLORS.into_iter().enumerate() {
+                        if color_option(ui, color, size, player.0 == i).clicked() {
+                            pe.send(PlanetEvent::SetPlayer {
+                                id: self.entity,
+                                player: Player(i),
+                            });
+                            *open = false;
+                        }
+                    }
+                })
+                .response
+            },
+            &mut self.events,
+            self.i,
+        ))
+    }
+}
+
 fn color_option(ui: &mut Ui, color: Color32, size: Vec2, active: bool) -> Response {
     let (response, painter) = ui.allocate_painter(size, Sense::hover().union(Sense::click()));
 
@@ -125,7 +186,7 @@ fn color_option(ui: &mut Ui, color: Color32, size: Vec2, active: bool) -> Respon
 
 pub fn ui_editor(
     mut egui_context: ResMut<EguiContext>,
-    query: Query<(&Location, &PlanetData, Entity), Without<HoverPlanet>>,
+    query: Query<(&Location, &PlanetData, Entity, &Selected), Without<HoverPlanet>>,
     mut hovering_ui: ResMut<HoveringUI>,
     mut planet_events: EventWriter<PlanetEvent>,
 ) {
@@ -135,58 +196,33 @@ pub fn ui_editor(
         .resizable(true)
         .show(egui_context.ctx_mut(), |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for (i, (l, player, e)) in query.iter().enumerate() {
-                    let PlanetData {
-                        ref player,
-                        ref name,
-                    } = player;
+                ui.label(RichText::new("Selected").color(ZEUS));
+                for (i, (l, player, e, s)) in query.iter().enumerate() {
+                    if s.0 {
+                        ui.add(PlanetWidget {
+                            i,
+                            data: player,
+                            loc: l,
+                            entity: e,
+                            events: &mut planet_events,
+                        });
+                        ui.separator();
+                    }
+                }
 
-                    let mut name = name.clone();
+                ui.label(RichText::new("Others").color(ZEUS));
 
-                    ui.horizontal(|ui| {
-                        ui.label("planet:");
-                        let resp = ui
-                            .add_sized(ui.available_size(), egui::TextEdit::singleline(&mut name));
-                        if resp.changed() {
-                            planet_events.send(PlanetEvent::SetName { id: e, name });
-                        }
-                    });
-
-                    ui.label(format!("x: {} y: {}", l.x, l.y));
-                    let pn = *player;
-                    ui.add(Collapsable::<_, _, &mut EventWriter<PlanetEvent>>::closed(
-                        |ui: &mut egui::Ui,
-                         open: &mut bool,
-                         _: &mut &mut EventWriter<PlanetEvent>| {
-                            let resp = color_option(ui, COLORS[pn.0], Vec2::splat(32.), false);
-
-                            if resp.clicked() {
-                                *open = !*open;
-                            };
-
-                            resp
-                        },
-                        |ui: &mut egui::Ui,
-                         open: &mut bool,
-                         pe: &mut &mut EventWriter<PlanetEvent>| {
-                            ui.horizontal_wrapped(move |ui| {
-                                let size = Vec2::splat(32.0);
-                                for (i, color) in COLORS.into_iter().enumerate() {
-                                    if color_option(ui, color, size, player.0 == i).clicked() {
-                                        pe.send(PlanetEvent::SetPlayer {
-                                            id: e,
-                                            player: Player(i),
-                                        });
-                                        *open = false;
-                                    }
-                                }
-                            })
-                            .response
-                        },
-                        &mut planet_events,
-                        i,
-                    ));
-                    ui.separator();
+                for (i, (l, player, e, s)) in query.iter().enumerate() {
+                    if !s.0 {
+                        ui.add(PlanetWidget {
+                            i,
+                            data: player,
+                            loc: l,
+                            entity: e,
+                            events: &mut planet_events,
+                        });
+                        ui.separator();
+                    }
                 }
             })
         })
@@ -232,13 +268,11 @@ fn ui_system(
     icons: Res<Icons>,
     mut writer: EventWriter<MapEvent>,
 ) {
-    let resp = egui::TopBottomPanel::bottom("bottom_panel")
+    egui::TopBottomPanel::bottom("bottom_panel")
         // .default_height(70.)
         .show(egui_context.ctx_mut(), |ui| {
-            let response = ui.allocate_response(
-                ui.available_size_before_wrap(),
-                egui::Sense::hover(),
-            );
+            let response =
+                ui.allocate_response(ui.available_size_before_wrap(), egui::Sense::hover());
             hovering_ui.0 = hovering_ui.0 || response.hovered();
 
             ui.allocate_ui_at_rect(response.rect, |ui| {
@@ -264,7 +298,6 @@ fn ui_system(
                         && config.ty != MapType::Triangles
                     {
                         writer.send(MapEvent::SetType(MapType::Triangles));
-                        println!("seting triangles");
                     }
 
                     if ui
@@ -281,8 +314,5 @@ fn ui_system(
                     ui.separator();
                 })
             })
-        })
-        .response;
-
-    // hovering_ui.0 = hovering_ui.0 || resp.hovered();
+        });
 }

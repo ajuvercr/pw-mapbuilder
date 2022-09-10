@@ -6,7 +6,7 @@ use bevy::{
 
 use crate::{
     map_config::{MapConfig, MapEvent, MapType},
-    planet::{HoverPlanet, Location, PlanetEvent, Player},
+    planet::{HoverPlanet, Location, PlanetEvent, Player, Selected},
     HoveringUI,
 };
 
@@ -151,10 +151,10 @@ pub fn change_bg_color(
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_planet(
-    commands: Commands,
+    mut commands: Commands,
     click: Res<Input<MouseButton>>,
     location: Query<&Location, With<HoverPlanet>>,
-    planets: Query<(Entity, &Location), Without<HoverPlanet>>,
+    planets: Query<(Entity, &Location, &Selected), Without<HoverPlanet>>,
     hovering_ui: Res<HoveringUI>,
     mut planet_events: EventWriter<PlanetEvent>,
     current_player: Res<Player>,
@@ -165,18 +165,22 @@ pub fn spawn_planet(
 
     let loc = location.single();
     if click.just_pressed(MouseButton::Left) {
-        planet_events.send(PlanetEvent::Create {
-            loc: *location.single(),
-            player: *current_player,
-        });
+        if let Some((e, _, s)) = planets.iter().find(|(_, l, _)| *l == loc) {
+            planet_events.send(PlanetEvent::SetSelected{ id: e, selected: !s.0 });
+        } else {
+            planet_events.send(PlanetEvent::Create {
+                loc: *location.single(),
+                player: *current_player,
+            });
+        }
     }
 
     if click.just_pressed(MouseButton::Right) {
         planet_events.send_batch(
             planets
                 .iter()
-                .filter(|(_, l)| *l == loc)
-                .map(|(e, _)| PlanetEvent::Delete { id: e }),
+                .filter(|(_, l, _)| *l == loc)
+                .map(|(e, _, _)| PlanetEvent::Delete { id: e }),
         );
     }
 }

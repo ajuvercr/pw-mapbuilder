@@ -4,7 +4,7 @@ use bevy_framepace::{FramepaceSettings, Limiter};
 use mapbuilder::{
     self, input,
     map_config::{MapConfig, MapConfigPlugin},
-    planet::{PlanetPlugin, HoverPlanet, Location},
+    planet::{HoverPlanet, Location, PlanetPlugin},
     ui::UIPlugin,
 };
 
@@ -35,22 +35,7 @@ fn setup_framepace_settings(mut settings: ResMut<FramepaceSettings>) {
     settings.limiter = Limiter::from_framerate(120.);
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    config: Res<MapConfig>,
-) {
-    let mut color = Color::PURPLE;
-    color.set_a(0.4);
-    commands
-        .spawn_bundle(MaterialMesh2dBundle {
-            mesh: meshes.add(config.mesh()).into(),
-            material: materials.add(ColorMaterial::from(color)),
-            ..default()
-        })
-        .insert_bundle((HoverPlanet, Location { x: 0, y: 0 }));
-
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, config: Res<MapConfig>) {
     let transform = Transform::from_xyz(0.0, 0.0, 1000.0).with_scale(Vec3::new(
         1. / config.zoom,
         1. / config.zoom,
@@ -60,6 +45,25 @@ fn setup(
         transform,
         ..default()
     });
+
+    let bundle = Text2dBundle {
+        text: Text::from_section(
+            "Hello Bevy",
+            TextStyle {
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size: 100.0,
+                color: Color::WHITE,
+            },
+        )
+        .with_alignment(TextAlignment::CENTER),
+        transform: Transform::from_scale(Vec3 {
+            x: 1. / config.zoom,
+            y: 1. / config.zoom,
+            z: 0.,
+        }),
+        ..default()
+    };
+    commands.spawn_bundle(bundle);
 }
 
 fn transform_hover_planet(

@@ -30,6 +30,7 @@ impl Plugin for LibPlugin {
         use rnglib::{Language, RNG};
         app.insert_resource(RNG::new(&Language::Curse).unwrap());
         app.insert_resource(FPS(0));
+        app.insert_resource(HoveringUI(false));
         app.add_system(fps);
     }
 }
