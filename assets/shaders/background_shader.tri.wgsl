@@ -33,6 +33,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     let uv = vec2<f32>(vertex.position.x * config.width * 0.5 - config.x, vertex.position.y * config.height * 0.5 - config.y);
     out.position = vec2<f32>(uv / config.zoom);// + vec2(0.5, 0.45);
+    var t_height = 0.8660254;
+    out.position.y = out.position.y + t_height * 0.5;
     return out;
 }
 
@@ -73,8 +75,8 @@ fn rotate(input: vec2<f32>, a: f32) -> vec2<f32> {
 
 @fragment
 fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
-    var fi = fract(in.position);
     var t_height = 0.8660254;
+    var fi = fract(in.position);
 
     var d1 = rotate(vec2(in.position.x, in.position.y), 60.0 * 3.141592 / 180.);
     var d2 = rotate(vec2(in.position.x, in.position.y), 120.0 * 3.141592 / 180.);

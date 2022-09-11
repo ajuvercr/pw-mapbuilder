@@ -1,3 +1,4 @@
+use bevy::prelude::DespawnRecursiveExt;
 use bevy::{
     prelude::*,
     sprite::{ColorMaterial, MaterialMesh2dBundle},
@@ -16,7 +17,6 @@ pub const COLORS: [Color32; 7] = [
     Color32::KHAKI,
     Color32::DEBUG_COLOR,
 ];
-
 pub struct PlanetPlugin;
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
@@ -33,10 +33,8 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    asset_server: Res<AssetServer>,
     config: Res<MapConfig>,
- ) {
-
+) {
     let mut color = Color::PURPLE;
     color.set_a(0.4);
     commands
@@ -63,14 +61,21 @@ impl Player {
 }
 
 #[derive(Component, Clone, Debug)]
+pub struct PlanetMesh;
+#[derive(Component, Clone, Debug)]
+pub struct PlanetName;
+
+#[derive(Component, Clone, Debug)]
 pub struct PlanetData {
     pub player: Player,
     pub name: String,
+    pub ship_count: usize,
 }
 
 #[derive(Component, Clone, Debug)]
 pub struct PlanetEntity {
-    name: Entity,
+    pub name: Entity,
+    pub mesh: Entity,
 }
 
 #[derive(Component, Debug, Default)]
@@ -90,10 +95,9 @@ pub enum PlanetEvent {
     Delete { id: Entity },
     SetPlayer { id: Entity, player: Player },
     SetName { id: Entity, name: String },
+    SetShipCount { id: Entity, amount: usize },
     SetSelected { id: Entity, selected: bool },
 }
-
-use bevy::prelude::DespawnRecursiveExt;
 
 fn change_planet_color(
     planets: Query<(&Handle<ColorMaterial>, &PlanetData), Changed<PlanetData>>,
@@ -109,7 +113,6 @@ fn show_text_on_selected(
     mut visibles: Query<&mut Visibility>,
 ) {
     for (p, s) in planets.iter() {
-        println!("HERE");
         let mut vis = visibles.get_mut(p.name).unwrap();
         vis.is_visible = s.0;
     }
@@ -124,50 +127,21 @@ fn handle_planet_events(
     mut materials: ResMut<Assets<ColorMaterial>>,
     generator: Res<RNG>,
     config: Res<MapConfig>,
-asset_server: Res<AssetServer>,
+    asset_server: Res<AssetServer>,
 ) {
     for event in event_reader.iter() {
         match event {
             PlanetEvent::Create { loc, player } => {
-                let transform = config.location_to_transform(loc, 0.);
-                let data = PlanetData {
-                    player: *player,
-                    name: generator.generate_name(),
-                };
-                let color = player.color();
-
-                let name = commands
-                    .spawn_bundle(Text2dBundle {
-                        text: Text::from_section(
-                            data.name.clone(),
-            TextStyle {
-                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                font_size: 50.0,
-                color: Color::WHITE,
-            },
-                        ).with_alignment(TextAlignment::CENTER),
-        transform: Transform::from_scale(Vec3 {
-            x: 1. / config.zoom,
-            y: 1. / config.zoom,
-            z: 1.,
-        }).with_translation(Vec3{ x: 0., y: -0.1, z: 1.}),
-        visibility: Visibility { is_visible: false},
-                        ..default()
-                    })
-                    .id();
-
-                commands
-                    .spawn_bundle(MaterialMesh2dBundle {
-                        mesh: meshes.add(config.mesh()).into(),
-                        material: materials.add(ColorMaterial::from(color)),
-                        transform,
-                        ..default()
-                    })
-                .add_child(name)
-                    .insert(*loc)
-                    .insert(data)
-                    .insert(Selected(false))
-                    .insert(PlanetEntity { name });
+                spawn_planet(
+                    &config,
+                    loc,
+                    player,
+                    &generator,
+                    &mut commands,
+                    &asset_server,
+                    &mut meshes,
+                    &mut materials,
+                );
             }
             PlanetEvent::Delete { id } => {
                 commands.entity(*id).despawn_recursive();
@@ -182,6 +156,11 @@ asset_server: Res<AssetServer>,
                     data.name = name.clone();
                 }
             }
+            PlanetEvent::SetShipCount { id, amount } => {
+                if let Ok((mut data, _)) = planets.get_mut(*id) {
+                    data.ship_count = *amount;
+                }
+            }
             PlanetEvent::SetSelected { id, selected } => {
                 if let Ok((_, mut s)) = planets.get_mut(*id) {
                     s.0 = *selected;
@@ -189,4 +168,74 @@ asset_server: Res<AssetServer>,
             }
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_planet(
+    config: &Res<MapConfig>,
+    loc: &Location,
+    player: &Player,
+    generator: &Res<RNG>,
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+) {
+    let data = PlanetData {
+        player: *player,
+        ship_count: 10,
+        name: generator.generate_name(),
+    };
+    let color = player.color();
+    let name = commands
+        .spawn_bundle(Text2dBundle {
+            text: Text::from_section(
+                data.name.clone(),
+                TextStyle {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 50.0,
+                    color: Color::WHITE,
+                },
+            )
+            .with_alignment(TextAlignment::CENTER),
+            transform: Transform::from_scale(Vec3 {
+                x: 1. / config.zoom,
+                y: 1. / config.zoom,
+                z: 1.,
+            })
+            .with_translation(Vec3 {
+                x: 0.,
+                y: -0.7,
+                z: 0.5,
+            }),
+            visibility: Visibility { is_visible: false },
+            ..default()
+        })
+        .insert(PlanetName)
+        .id();
+
+    let transform = config.location_to_delta(loc);
+    let mesh = commands
+        .spawn_bundle(MaterialMesh2dBundle {
+            mesh: meshes.add(config.mesh()).into(),
+            material: materials.add(ColorMaterial::from(color)),
+            transform,
+            ..default()
+        })
+        .insert(PlanetMesh)
+        .id();
+
+    let transform = config.location_to_transform(loc, 0.5);
+    commands
+        .spawn()
+        .insert(Visibility::default())
+        .insert(ComputedVisibility::default())
+        .insert(GlobalTransform::default())
+        .insert(transform)
+        .insert(*loc)
+        .insert(data)
+        .insert(Selected(false))
+        .add_child(name)
+        .add_child(mesh)
+        .insert(PlanetEntity { name, mesh });
 }

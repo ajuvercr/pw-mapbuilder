@@ -5,7 +5,7 @@ use bevy::{
     sprite::Mesh2dHandle,
 };
 
-use crate::planet::{HoverPlanet, Location};
+use crate::planet::{HoverPlanet, Location, PlanetEntity, PlanetMesh};
 
 pub enum MapEvent {
     SetColor(Color),
@@ -16,7 +16,8 @@ pub struct MapConfigPlugin;
 impl Plugin for MapConfigPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_startup_system(setup_config)
-            .add_event::<MapEvent>().insert_resource(MapConfig::new(0., 0.))
+            .add_event::<MapEvent>()
+            .insert_resource(MapConfig::new(0., 0.))
             .add_system(handle_map_events);
     }
 }
@@ -34,13 +35,18 @@ fn handle_map_events(
     mut reader: EventReader<MapEvent>,
     mut config: ResMut<MapConfig>,
 
-    mut locations: Query<(
-        &mut Mesh2dHandle,
-        &mut Transform,
-        &Location,
-        Option<&HoverPlanet>,
-    )>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    mut hover_planet: Query<(&mut Transform, &mut Mesh2dHandle, &Location), With<HoverPlanet>>,
+
+    mut locations: Query<
+        (&PlanetEntity, &mut Transform, &Location),
+        (Without<HoverPlanet>, Without<PlanetMesh>),
+    >,
+    mut meshes: Query<
+        (&mut Transform, &mut Mesh2dHandle),
+        (Without<HoverPlanet>, With<PlanetMesh>),
+    >,
+
+    mut meshe_assets: ResMut<Assets<Mesh>>,
 ) {
     let mut update_meshes = false;
     for event in reader.iter() {
@@ -56,12 +62,24 @@ fn handle_map_events(
     }
 
     if update_meshes {
-        let mesh_handle: Mesh2dHandle = meshes.add(config.mesh()).into();
+        let mesh_handle: Mesh2dHandle = meshe_assets.add(config.mesh()).into();
 
-        for (mut l, mut t, loc, h) in locations.iter_mut() {
+        for (e, mut t, loc) in locations.iter_mut() {
+            // Update hover planet mesh
+            *t = config.location_to_transform(loc, 0.);
+
+            let (mut t, mut l) = meshes.get_mut(e.mesh).unwrap();
+
+            *t = config.location_to_delta(loc);
             *l = mesh_handle.clone();
-            let z = if h.is_some() { 0.1 } else { 0.0 };
-            *t = config.location_to_transform(loc, z);
+        }
+
+        for (mut t, mut l, loc) in hover_planet.iter_mut() {
+            *l = mesh_handle.clone();
+
+            *t = config
+                .location_to_transform(loc, 0.1)
+                .mul_transform(config.location_to_delta(loc));
         }
     }
 }
@@ -114,6 +132,7 @@ impl MapConfig {
             MapType::Squares => Mesh::from(shape::Quad::new(Vec2::new(1., 1.))),
             MapType::Triangles => {
                 let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+                let th2 = TRIAG_HEIGHT * 0.5;
                 mesh.insert_attribute(
                     Mesh::ATTRIBUTE_POSITION,
                     // vec![
@@ -121,7 +140,8 @@ impl MapConfig {
                     //     [0.5, -TRIAG_HEIGHT * 0.5, 0.0],
                     //     [0., TRIAG_HEIGHT * 0.5, 0.0],
                     // ],
-                    vec![[-0.5, 0., 0.0], [0.5, 0., 0.0], [0., TRIAG_HEIGHT, 0.0]],
+                    vec![[-0.5, -th2, 0.0], [0.5, -th2, 0.0], [0., th2, 0.0]],
+                    // vec![[-0.5, 0., 0.0], [0.5, 0., 0.0], [0., TRIAG_HEIGHT, 0.0]],
                 );
                 mesh.insert_attribute(
                     Mesh::ATTRIBUTE_NORMAL,
@@ -174,7 +194,7 @@ impl MapConfig {
             }
             MapType::Triangles => {
                 let mut x = x * 2.0 + 1.;
-                let y = y;
+                let y = y + TRIAG_HEIGHT * 0.5;
                 let p = 1.154_700_5; // tan(pi / 6) * 2    //  30 degrees
                 let row = (y / TRIAG_HEIGHT).floor();
                 let mut frac = y - row * TRIAG_HEIGHT;
@@ -208,6 +228,19 @@ impl MapConfig {
         }
     }
 
+    pub fn location_to_delta(&self, location: &Location) -> Transform {
+        match self.ty {
+            MapType::Squares => Transform::default(),
+            MapType::Triangles => {
+                if location.x % 2 == 1 || location.x % 2 == -1 {
+                    Transform::from_matrix(Mat4::from_rotation_z(std::f32::consts::PI))
+                } else {
+                    Transform::default()
+                }
+            }
+        }
+    }
+
     pub fn location_to_transform(&self, location: &Location, z: f32) -> Transform {
         match self.ty {
             MapType::Squares => Transform::default().with_translation(Vec3::new(
@@ -217,13 +250,6 @@ impl MapConfig {
             )),
             MapType::Triangles => {
                 let mut mat = Mat4::IDENTITY;
-
-                if location.x % 2 == 1 || location.x % 2 == -1 {
-                    mat = Mat4::from_translation(Vec3::new(0., TRIAG_HEIGHT * 0.5, 0.))
-                        * Mat4::from_rotation_z(std::f32::consts::PI)
-                        * Mat4::from_translation(Vec3::new(0., TRIAG_HEIGHT * -0.5, 0.))
-                        * mat;
-                }
 
                 let dx = if location.y % 2 == 0 { -1. } else { 0. };
                 mat = Mat4::from_translation(Vec3::new(

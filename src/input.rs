@@ -151,7 +151,6 @@ pub fn change_bg_color(
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_planet(
-    mut commands: Commands,
     click: Res<Input<MouseButton>>,
     location: Query<&Location, With<HoverPlanet>>,
     planets: Query<(Entity, &Location, &Selected), Without<HoverPlanet>>,

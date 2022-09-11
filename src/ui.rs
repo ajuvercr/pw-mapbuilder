@@ -118,6 +118,7 @@ impl<'a, 'w, 's> Widget for PlanetWidget<'a, 'w, 's> {
         let PlanetData {
             ref player,
             ref name,
+            ref ship_count,
         } = self.data;
 
         let mut name = name.clone();
@@ -129,6 +130,37 @@ impl<'a, 'w, 's> Widget for PlanetWidget<'a, 'w, 's> {
                     id: self.entity,
                     name,
                 });
+            }
+        });
+
+        let mut ship_count = ship_count.to_string();
+        ui.horizontal(|ui| {
+            ui.label("ship count:");
+            let resp = ui.add_sized(
+                ui.available_size(),
+                egui::TextEdit::singleline(&mut ship_count),
+            );
+            if resp.changed() {
+                if let Ok(amount) = ship_count.parse() {
+                    self.events.send(PlanetEvent::SetShipCount {
+                        id: self.entity,
+                        amount,
+                    });
+                } else {
+                    let (response, painter) = ui.allocate_painter(
+                        Vec2::splat(64.),
+                        Sense {
+                            drag: false,
+                            click: false,
+                            focusable: false,
+                        },
+                    );
+
+                    let rect = response.rect;
+
+                    let rect = rect.shrink(5.);
+                    painter.rect_filled(rect, Rounding::none(), Color32::RED);
+                }
             }
         });
 
