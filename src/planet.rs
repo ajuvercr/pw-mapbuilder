@@ -23,6 +23,7 @@ impl Plugin for PlanetPlugin {
         app.insert_resource(Player(0))
             .add_event::<PlanetEvent>()
             .add_startup_system(setup)
+            .add_system(align_planet_name)
             .add_system(handle_planet_events)
             .add_system(change_planet_color)
             .add_system(show_text_on_selected);
@@ -238,4 +239,17 @@ fn spawn_planet(
         .add_child(name)
         .add_child(mesh)
         .insert(PlanetEntity { name, mesh });
+}
+
+fn align_planet_name(
+    mut query: Query<(&PlanetData, &PlanetEntity), Changed<PlanetData>>,
+    mut texts: Query<&mut Text, With<PlanetName>>,
+) {
+    for (d, e) in query.iter_mut() {
+        if let Ok(mut t) = texts.get_mut(e.name) {
+            t.sections[0].value = d.name.clone();
+        } else {
+            eprintln!("No such entity found!");
+        }
+    }
 }
