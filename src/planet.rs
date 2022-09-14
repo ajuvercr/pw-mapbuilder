@@ -5,6 +5,7 @@ use bevy::{
 };
 use egui::Color32;
 use rnglib::RNG;
+use serde::{Deserialize, Serialize};
 
 use crate::map_config::MapConfig;
 
@@ -40,14 +41,14 @@ fn setup(
     color.set_a(0.4);
     commands
         .spawn_bundle(MaterialMesh2dBundle {
-            mesh: meshes.add(config.mesh()).into(),
+            mesh: config.mesh().into(),
             material: materials.add(ColorMaterial::from(color)),
             ..default()
         })
         .insert_bundle((HoverPlanet, Location { x: 0, y: 0 }));
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Player(pub usize);
 
 impl Player {
@@ -66,7 +67,7 @@ pub struct PlanetMesh;
 #[derive(Component, Clone, Debug)]
 pub struct PlanetName;
 
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug)]
 pub struct PlanetData {
     pub player: Player,
     pub name: String,
@@ -82,7 +83,9 @@ pub struct PlanetEntity {
 #[derive(Component, Debug, Default)]
 pub struct HoverPlanet;
 
-#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Component, Clone, Copy, Serialize, Deserialize, Debug, Default, PartialEq, Eq, PartialOrd, Ord,
+)]
 pub struct Location {
     pub x: i32,
     pub y: i32,
@@ -93,6 +96,7 @@ pub struct Selected(pub bool);
 
 pub enum PlanetEvent {
     Create { loc: Location, player: Player },
+    CreateNamed { loc: Location, data: PlanetData },
     Delete { id: Entity },
     SetPlayer { id: Entity, player: Player },
     SetName { id: Entity, name: String },
@@ -144,6 +148,9 @@ fn handle_planet_events(
                     &mut materials,
                 );
             }
+            PlanetEvent::CreateNamed { data, loc } => {
+                spawn_named_planet(&config, &mut commands, data.clone(), *loc, &mut materials);
+            }
             PlanetEvent::Delete { id } => {
                 commands.entity(*id).despawn_recursive();
             }
@@ -171,6 +178,68 @@ fn handle_planet_events(
     }
 }
 
+fn spawn_named_planet(
+    config: &Res<MapConfig>,
+    commands: &mut Commands,
+    data: PlanetData,
+    loc: Location,
+
+    materials: &mut Assets<ColorMaterial>,
+) {
+    let color = data.player.color();
+    let name = commands
+        .spawn_bundle(Text2dBundle {
+            text: Text::from_section(
+                data.name.clone(),
+                TextStyle {
+                    font: config.font.clone_weak(),
+                    font_size: 30.0,
+                    color: Color::WHITE,
+                },
+            )
+            .with_alignment(TextAlignment::CENTER),
+            transform: Transform::from_scale(Vec3 {
+                x: 0.01,
+                y: 0.01,
+                z: 1.,
+            })
+            .with_translation(Vec3 {
+                x: 0.,
+                y: -0.6,
+                z: 0.5,
+            }),
+            visibility: Visibility { is_visible: false },
+            ..default()
+        })
+        .insert(PlanetName)
+        .id();
+
+    let transform = config.location_to_delta(&loc);
+    let mesh = commands
+        .spawn_bundle(MaterialMesh2dBundle {
+            mesh: config.mesh().into(),
+            material: materials.add(ColorMaterial::from(color)),
+            transform,
+            ..default()
+        })
+        .insert(PlanetMesh)
+        .id();
+
+    let transform = config.location_to_transform(&loc, 0.5);
+    commands
+        .spawn()
+        .insert(Visibility::default())
+        .insert(ComputedVisibility::default())
+        .insert(GlobalTransform::default())
+        .insert(transform)
+        .insert(loc)
+        .insert(data)
+        .insert(Selected(false))
+        .add_child(name)
+        .add_child(mesh)
+        .insert(PlanetEntity { name, mesh });
+}
+
 #[allow(clippy::too_many_arguments)]
 fn spawn_planet(
     config: &Res<MapConfig>,
@@ -180,65 +249,15 @@ fn spawn_planet(
     commands: &mut Commands,
     asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<ColorMaterial>>,
+    mut materials: &mut ResMut<Assets<ColorMaterial>>,
 ) {
     let data = PlanetData {
         player: *player,
         ship_count: 10,
         name: generator.generate_name(),
     };
-    let color = player.color();
-    let name = commands
-        .spawn_bundle(Text2dBundle {
-            text: Text::from_section(
-                data.name.clone(),
-                TextStyle {
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    font_size: 50.0,
-                    color: Color::WHITE,
-                },
-            )
-            .with_alignment(TextAlignment::CENTER),
-            transform: Transform::from_scale(Vec3 {
-                x: 1. / config.zoom,
-                y: 1. / config.zoom,
-                z: 1.,
-            })
-            .with_translation(Vec3 {
-                x: 0.,
-                y: -0.7,
-                z: 0.5,
-            }),
-            visibility: Visibility { is_visible: false },
-            ..default()
-        })
-        .insert(PlanetName)
-        .id();
 
-    let transform = config.location_to_delta(loc);
-    let mesh = commands
-        .spawn_bundle(MaterialMesh2dBundle {
-            mesh: meshes.add(config.mesh()).into(),
-            material: materials.add(ColorMaterial::from(color)),
-            transform,
-            ..default()
-        })
-        .insert(PlanetMesh)
-        .id();
-
-    let transform = config.location_to_transform(loc, 0.5);
-    commands
-        .spawn()
-        .insert(Visibility::default())
-        .insert(ComputedVisibility::default())
-        .insert(GlobalTransform::default())
-        .insert(transform)
-        .insert(*loc)
-        .insert(data)
-        .insert(Selected(false))
-        .add_child(name)
-        .add_child(mesh)
-        .insert(PlanetEntity { name, mesh });
+    spawn_named_planet(&config, commands, data, *loc, &mut materials);
 }
 
 fn align_planet_name(

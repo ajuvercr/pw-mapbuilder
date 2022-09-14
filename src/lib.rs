@@ -8,6 +8,7 @@ pub mod background;
 pub mod input;
 pub mod map_config;
 pub mod planet;
+pub mod scene;
 pub mod ui;
 
 pub struct HoveringUI(pub bool);
@@ -36,4 +37,3 @@ impl Plugin for LibPlugin {
 }
 
 pub const ZEUS: Color32 = Color32::from_rgb(255, 128, 0);
-

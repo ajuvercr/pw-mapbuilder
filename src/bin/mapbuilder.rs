@@ -1,10 +1,11 @@
-use bevy::{prelude::*, window::PresentMode};
+use bevy::{prelude::*, scene::ScenePlugin, window::PresentMode};
 use bevy_egui::EguiPlugin;
 use bevy_framepace::{FramepaceSettings, Limiter};
 use mapbuilder::{
     self, input,
     map_config::{MapConfig, MapConfigPlugin},
     planet::{HoverPlanet, Location, PlanetPlugin},
+    scene,
     ui::UIPlugin,
 };
 
@@ -15,14 +16,16 @@ fn main() {
         present_mode: PresentMode::AutoNoVsync,
         ..default()
     })
+    // .insert_resource(Msaa { samples: 1 })
     .add_plugins(DefaultPlugins)
     .add_plugin(EguiPlugin)
-    .add_plugin(bevy_framepace::FramepacePlugin)
     .add_plugin(mapbuilder::LibPlugin)
+    .add_plugin(MapConfigPlugin)
+    .add_plugin(scene::ScenePlugin)
+    .add_plugin(bevy_framepace::FramepacePlugin)
     .add_plugin(UIPlugin)
     .add_plugin(input::InputPlugin)
     .add_plugin(PlanetPlugin)
-    .add_plugin(MapConfigPlugin)
     .add_plugin(mapbuilder::background::BackgroundPlugin)
     .add_startup_system(setup)
     .add_startup_system(setup_framepace_settings)
@@ -53,6 +56,8 @@ fn transform_hover_planet(
 ) {
     if let Ok((loc, mut transform)) = query.get_single_mut() {
         let delta_transform = config.location_to_delta(loc);
-        *transform = config.location_to_transform(loc, 0.1).mul_transform(delta_transform);
+        *transform = config
+            .location_to_transform(loc, 0.1)
+            .mul_transform(delta_transform);
     }
 }

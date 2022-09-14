@@ -1,8 +1,7 @@
-use std::hash::Hash;
-
 use crate::{
     map_config::{MapConfig, MapEvent, MapType},
     planet::{HoverPlanet, Location, PlanetData, PlanetEvent, Player, Selected, COLORS},
+    scene::SceneEvent,
     HoveringUI, ZEUS,
 };
 use bevy::prelude::*;
@@ -11,17 +10,18 @@ use egui::{
     pos2, Color32, Rect, Response, RichText, Rounding, Sense, Shape, Stroke, TextureId, Ui, Vec2,
     Widget, WidgetWithState,
 };
+use rfd::FileDialog;
+use std::hash::Hash;
 
 use crate::FPS;
 
 pub struct UIPlugin;
 impl Plugin for UIPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_system(ui_editor)
+        app.add_system(ui_editor.before(ui_system))
             .add_system(ui_system)
             .init_resource::<Icons>()
             .add_startup_system(load_images)
-            // .add_system(set_images)
             .insert_resource(HoveringUI(false));
     }
 }
@@ -221,12 +221,37 @@ pub fn ui_editor(
     query: Query<(&Location, &PlanetData, Entity, &Selected), Without<HoverPlanet>>,
     mut hovering_ui: ResMut<HoveringUI>,
     mut planet_events: EventWriter<PlanetEvent>,
+    mut scene_events: EventWriter<SceneEvent>,
 ) {
     hovering_ui.0 = false;
     let resp = egui::SidePanel::right("right_panel")
         .min_width(250.)
         .resizable(true)
         .show(egui_context.ctx_mut(), |ui| {
+            ui.add_space(8.);
+            ui.horizontal(|ui| {
+                if ui.button("Save").clicked() {
+                    if let Some(path) = FileDialog::new().save_file() {
+                        scene_events.send(SceneEvent::Save(path));
+                    }
+                }
+                if ui.button("Load").clicked() {
+                    if let Some(path) = FileDialog::new().pick_file() {
+                        scene_events.send(SceneEvent::Load(path));
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                let mut size = String::new();
+                ui.label("Total width duration: ");
+                ui.text_edit_singleline(&mut size);
+            });
+            ui.button("Export");
+
+            ui.add_space(8.);
+            ui.separator();
+            ui.add_space(8.);
+
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.label(RichText::new("Selected").color(ZEUS));
                 for (i, (l, player, e, s)) in query.iter().enumerate() {

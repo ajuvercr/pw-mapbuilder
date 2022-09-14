@@ -7,6 +7,8 @@ use bevy::{
 
 use crate::planet::{HoverPlanet, Location, PlanetEntity, PlanetMesh};
 
+use serde::{Deserialize, Serialize};
+
 pub enum MapEvent {
     SetColor(Color),
     SetType(MapType),
@@ -15,20 +17,24 @@ pub enum MapEvent {
 pub struct MapConfigPlugin;
 impl Plugin for MapConfigPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_startup_system(setup_config)
+        app.add_startup_system_to_stage(StartupStage::PreStartup, setup_config)
             .add_event::<MapEvent>()
-            .insert_resource(MapConfig::new(0., 0.))
             .add_system(handle_map_events);
     }
 }
 
-fn setup_config(windows: Res<Windows>, mut config: ResMut<MapConfig>) {
+fn setup_config(
+    mut commands: Commands,
+    windows: Res<Windows>,
+    asset: Res<AssetServer>,
+    mut mesh_assets: ResMut<Assets<Mesh>>,
+) {
     let (w, h) = {
         let window = windows.get_primary().unwrap();
         (window.width(), window.height())
     };
-    config.width = w;
-    config.height = h;
+    let config = MapConfig::new(w, h, &asset, &mut mesh_assets);
+    commands.insert_resource(config);
 }
 
 fn handle_map_events(
@@ -45,8 +51,6 @@ fn handle_map_events(
         (&mut Transform, &mut Mesh2dHandle),
         (Without<HoverPlanet>, With<PlanetMesh>),
     >,
-
-    mut meshe_assets: ResMut<Assets<Mesh>>,
 ) {
     let mut update_meshes = false;
     for event in reader.iter() {
@@ -62,7 +66,7 @@ fn handle_map_events(
     }
 
     if update_meshes {
-        let mesh_handle: Mesh2dHandle = meshe_assets.add(config.mesh()).into();
+        let mesh_handle: Mesh2dHandle = config.mesh().into();
 
         for (e, mut t, loc) in locations.iter_mut() {
             // Update hover planet mesh
@@ -84,7 +88,7 @@ fn handle_map_events(
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MapType {
     Squares,
     Triangles,
@@ -92,7 +96,7 @@ pub enum MapType {
 
 const TRIAG_HEIGHT: f32 = 0.866_025_4; // sqrt(1 - 0.25) height of equal triangle
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct MapConfig {
     pub ty: MapType,
 
@@ -108,10 +112,24 @@ pub struct MapConfig {
     pub mouse_y: Option<f32>,
 
     pub bg_color: Color,
+
+    pub font: Handle<Font>,
+
+    meshes: Vec<(MapType, Handle<Mesh>)>,
 }
 
 impl MapConfig {
-    pub fn new(width: f32, height: f32) -> Self {
+    pub fn new(
+        width: f32,
+        height: f32,
+        asset_server: &AssetServer,
+        mesh_assets: &mut Assets<Mesh>,
+    ) -> Self {
+        let meshes = [MapType::Squares, MapType::Triangles]
+            .into_iter()
+            .map(|x| (x, MapConfig::mesh_asset(x, mesh_assets)))
+            .collect();
+        let font = asset_server.load("fonts/FiraSans-Bold.ttf");
         Self {
             ty: MapType::Triangles,
             zoom: 100.,
@@ -124,11 +142,21 @@ impl MapConfig {
             mouse_y: None,
 
             bg_color: Color::GRAY,
+            meshes,
+            font,
         }
     }
 
-    pub fn mesh(&self) -> Mesh {
-        match self.ty {
+    pub fn mesh(&self) -> Handle<Mesh> {
+        self.meshes
+            .iter()
+            .find(|x| x.0 == self.ty)
+            .map(|x| x.1.clone_weak())
+            .unwrap()
+    }
+
+    fn mesh_asset(ty: MapType, mesh_assets: &mut Assets<Mesh>) -> Handle<Mesh> {
+        let mesh = match ty {
             MapType::Squares => Mesh::from(shape::Quad::new(Vec2::new(1., 1.))),
             MapType::Triangles => {
                 let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
@@ -154,7 +182,9 @@ impl MapConfig {
                 mesh.set_indices(Some(Indices::U32(vec![0, 1, 2])));
                 mesh
             }
-        }
+        };
+
+        mesh_assets.add(mesh)
     }
 
     pub fn set_zoom(&mut self, zoom: f32) {

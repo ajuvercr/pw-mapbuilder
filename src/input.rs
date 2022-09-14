@@ -165,7 +165,10 @@ pub fn spawn_planet(
     let loc = location.single();
     if click.just_pressed(MouseButton::Left) {
         if let Some((e, _, s)) = planets.iter().find(|(_, l, _)| *l == loc) {
-            planet_events.send(PlanetEvent::SetSelected{ id: e, selected: !s.0 });
+            planet_events.send(PlanetEvent::SetSelected {
+                id: e,
+                selected: !s.0,
+            });
         } else {
             planet_events.send(PlanetEvent::Create {
                 loc: *location.single(),
