@@ -10,7 +10,7 @@ use egui::{
     pos2, Color32, Rect, Response, RichText, Rounding, Sense, Shape, Stroke, TextureId, Ui, Vec2,
     Widget, WidgetWithState,
 };
-use rfd::FileDialog;
+// use rfd::FileDialog;
 use std::hash::Hash;
 
 use crate::FPS;
@@ -231,14 +231,14 @@ pub fn ui_editor(
             ui.add_space(8.);
             ui.horizontal(|ui| {
                 if ui.button("Save").clicked() {
-                    if let Some(path) = FileDialog::new().save_file() {
-                        scene_events.send(SceneEvent::Save(path));
-                    }
+                    // if let Some(path) = FileDialog::new().save_file() {
+                    //     scene_events.send(SceneEvent::Save(path));
+                    // }
                 }
                 if ui.button("Load").clicked() {
-                    if let Some(path) = FileDialog::new().pick_file() {
-                        scene_events.send(SceneEvent::Load(path));
-                    }
+                    // if let Some(path) = FileDialog::new().pick_file() {
+                    //     scene_events.send(SceneEvent::Load(path));
+                    // }
                 }
             });
             ui.horizontal(|ui| {
@@ -246,7 +246,11 @@ pub fn ui_editor(
                 ui.label("Total width duration: ");
                 ui.text_edit_singleline(&mut size);
             });
-            ui.button("Export");
+            if ui.button("Export").clicked() {
+                // if let Some(path) = FileDialog::new().pick_file() {
+                scene_events.send(SceneEvent::Export);
+                // }
+            }
 
             ui.add_space(8.);
             ui.separator();

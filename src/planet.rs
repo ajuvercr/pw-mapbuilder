@@ -4,10 +4,11 @@ use bevy::{
     sprite::{ColorMaterial, MaterialMesh2dBundle},
 };
 use egui::Color32;
-use rnglib::RNG;
+use petname::Petnames;
 use serde::{Deserialize, Serialize};
 
 use crate::map_config::MapConfig;
+use crate::utils;
 
 pub const COLORS: [Color32; 7] = [
     Color32::GRAY,
@@ -33,7 +34,6 @@ impl Plugin for PlanetPlugin {
 
 fn setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     config: Res<MapConfig>,
 ) {
@@ -128,25 +128,21 @@ fn handle_planet_events(
     mut event_reader: EventReader<PlanetEvent>,
     mut planets: Query<(&mut PlanetData, &mut Selected)>,
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    generator: Res<RNG>,
+    names: Res<Petnames<'static>>,
+    mut rng: ResMut<utils::rng::RNG>,
     config: Res<MapConfig>,
-    asset_server: Res<AssetServer>,
 ) {
     for event in event_reader.iter() {
         match event {
             PlanetEvent::Create { loc, player } => {
-                spawn_planet(
-                    &config,
-                    loc,
-                    player,
-                    &generator,
-                    &mut commands,
-                    &asset_server,
-                    &mut meshes,
-                    &mut materials,
-                );
+                let data = PlanetData {
+                    player: *player,
+                    ship_count: 10,
+                    name: names.generate(rng.as_mut(), 2, " "),
+                };
+
+                spawn_named_planet(&config, &mut commands, data, *loc, &mut materials);
             }
             PlanetEvent::CreateNamed { data, loc } => {
                 spawn_named_planet(&config, &mut commands, data.clone(), *loc, &mut materials);
@@ -238,26 +234,6 @@ fn spawn_named_planet(
         .add_child(name)
         .add_child(mesh)
         .insert(PlanetEntity { name, mesh });
-}
-
-#[allow(clippy::too_many_arguments)]
-fn spawn_planet(
-    config: &Res<MapConfig>,
-    loc: &Location,
-    player: &Player,
-    generator: &Res<RNG>,
-    commands: &mut Commands,
-    asset_server: &Res<AssetServer>,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    mut materials: &mut ResMut<Assets<ColorMaterial>>,
-) {
-    let data = PlanetData {
-        player: *player,
-        ship_count: 10,
-        name: generator.generate_name(),
-    };
-
-    spawn_named_planet(&config, commands, data, *loc, &mut materials);
 }
 
 fn align_planet_name(

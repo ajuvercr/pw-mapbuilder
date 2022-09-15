@@ -16,20 +16,21 @@ fn main() {
         present_mode: PresentMode::AutoNoVsync,
         ..default()
     })
-    // .insert_resource(Msaa { samples: 1 })
     .add_plugins(DefaultPlugins)
     .add_plugin(EguiPlugin)
     .add_plugin(mapbuilder::LibPlugin)
     .add_plugin(MapConfigPlugin)
     .add_plugin(scene::ScenePlugin)
-    .add_plugin(bevy_framepace::FramepacePlugin)
     .add_plugin(UIPlugin)
     .add_plugin(input::InputPlugin)
     .add_plugin(PlanetPlugin)
     .add_plugin(mapbuilder::background::BackgroundPlugin)
     .add_startup_system(setup)
-    .add_startup_system(setup_framepace_settings)
     .add_system(transform_hover_planet);
+
+    #[cfg(not(target_family = "wasm"))]
+    app.add_plugin(bevy_framepace::FramepacePlugin)
+        .add_startup_system(setup_framepace_settings);
 
     app.run();
 }

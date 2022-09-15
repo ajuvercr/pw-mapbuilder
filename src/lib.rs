@@ -3,6 +3,7 @@ use bevy::{
     time::Time,
 };
 use egui::Color32;
+use petname::Petnames;
 
 pub mod background;
 pub mod input;
@@ -10,6 +11,7 @@ pub mod map_config;
 pub mod planet;
 pub mod scene;
 pub mod ui;
+pub mod utils;
 
 pub struct HoveringUI(pub bool);
 
@@ -28,8 +30,8 @@ pub struct LibPlugin;
 
 impl Plugin for LibPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        use rnglib::{Language, RNG};
-        app.insert_resource(RNG::new(&Language::Curse).unwrap());
+        app.insert_resource(utils::rng::new());
+        app.insert_resource(Petnames::small());
         app.insert_resource(FPS(0));
         app.insert_resource(HoveringUI(false));
         app.add_system(fps);

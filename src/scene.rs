@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     map_config::{MapConfig, MapEvent, MapType},
-    planet::{Location, PlanetData, PlanetEntity, PlanetEvent},
+    planet::{Location, PlanetData, PlanetEvent},
 };
 
 pub enum SceneEvent {
@@ -126,7 +126,29 @@ fn handle_scene_events(
                     },
                 ));
             }
-            SceneEvent::Export => todo!(),
+            SceneEvent::Export => {
+                #[derive(Serialize)]
+                struct Planet<'a> {
+                    name: &'a str,
+                    x: f32,
+                    y: f32,
+                    owner: Option<usize>,
+                    ship_count: usize,
+                }
+
+                let planets: Vec<_> = planets
+                    .iter()
+                    .map(|(data, loc, _)| Planet {
+                        name: &data.name,
+                        x: loc.x as f32,
+                        y: loc.y as f32,
+                        owner: Some(data.player.0),
+                        ship_count: data.ship_count,
+                    })
+                    .collect();
+
+                println!("{}", serde_json::json!({ "planets": planets }));
+            }
         }
     }
 }
