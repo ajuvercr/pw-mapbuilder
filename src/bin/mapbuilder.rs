@@ -1,4 +1,4 @@
-use bevy::{prelude::*, scene::ScenePlugin, window::PresentMode};
+use bevy::{prelude::*, window::PresentMode};
 use bevy_egui::EguiPlugin;
 use bevy_framepace::{FramepaceSettings, Limiter};
 use mapbuilder::{

@@ -89,21 +89,21 @@ pub fn world_move(
 
     let mut translate = Vec3::ZERO;
 
-    if input.pressed(KeyCode::W) {
+    if input.pressed(KeyCode::W) || input.pressed(KeyCode::Up) {
         translate.y += delta;
         changed = true;
     }
 
-    if input.pressed(KeyCode::S) {
+    if input.pressed(KeyCode::S) || input.pressed(KeyCode::Down) {
         translate.y -= delta;
         changed = true;
     }
 
-    if input.pressed(KeyCode::D) {
+    if input.pressed(KeyCode::D)|| input.pressed(KeyCode::Right) {
         translate.x += delta;
         changed = true;
     }
-    if input.pressed(KeyCode::A) {
+    if input.pressed(KeyCode::A) || input.pressed(KeyCode::Left) {
         translate.x -= delta;
         changed = true;
     }

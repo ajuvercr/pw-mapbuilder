@@ -104,15 +104,6 @@ pub enum PlanetEvent {
     SetSelected { id: Entity, selected: bool },
 }
 
-fn change_planet_color(
-    planets: Query<(&Handle<ColorMaterial>, &PlanetData), Changed<PlanetData>>,
-    mut meshes: ResMut<Assets<ColorMaterial>>,
-) {
-    for (h, d) in planets.into_iter() {
-        meshes.set_untracked(h, ColorMaterial::from(d.player.color()));
-    }
-}
-
 fn show_text_on_selected(
     planets: Query<(&PlanetEntity, &Selected), Changed<Selected>>,
     mut visibles: Query<&mut Visibility>,
@@ -234,6 +225,18 @@ fn spawn_named_planet(
         .add_child(name)
         .add_child(mesh)
         .insert(PlanetEntity { name, mesh });
+}
+
+fn change_planet_color(
+    planets: Query<(&PlanetData, &PlanetEntity), Changed<PlanetData>>,
+    meshes_query: Query<&Handle<ColorMaterial>, With<PlanetMesh>>,
+    mut meshes: ResMut<Assets<ColorMaterial>>,
+) {
+    for (d, e) in planets.into_iter() {
+        if let Ok(h) = meshes_query.get(e.mesh) {
+            meshes.set_untracked(h, ColorMaterial::from(d.player.color()));
+        }
+    }
 }
 
 fn align_planet_name(
