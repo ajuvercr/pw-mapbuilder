@@ -10,8 +10,9 @@ use egui::{
     pos2, Color32, Rect, Response, RichText, Rounding, Sense, Shape, Stroke, TextureId, Ui, Vec2,
     Widget, WidgetWithState,
 };
+use rfd::FileDialog;
 // use rfd::FileDialog;
-use std::hash::Hash;
+use std::{hash::Hash, ops::DerefMut};
 
 use crate::FPS;
 
@@ -216,12 +217,17 @@ fn color_option(ui: &mut Ui, color: Color32, size: Vec2, active: bool) -> Respon
     response
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn ui_editor(
     mut egui_context: ResMut<EguiContext>,
     query: Query<(&Location, &PlanetData, Entity, &Selected), Without<HoverPlanet>>,
     mut hovering_ui: ResMut<HoveringUI>,
     mut planet_events: EventWriter<PlanetEvent>,
     mut scene_events: EventWriter<SceneEvent>,
+
+    mut size_buf: Local<String>,
+    mut scale: Local<f32>,
+    mut enabled: Local<bool>,
 ) {
     hovering_ui.0 = false;
     let resp = egui::SidePanel::right("right_panel")
@@ -231,26 +237,35 @@ pub fn ui_editor(
             ui.add_space(8.);
             ui.horizontal(|ui| {
                 if ui.button("Save").clicked() {
-                    // if let Some(path) = FileDialog::new().save_file() {
-                    //     scene_events.send(SceneEvent::Save(path));
-                    // }
+                    if let Some(path) = FileDialog::new().save_file() {
+                        scene_events.send(SceneEvent::Save(path));
+                    }
                 }
                 if ui.button("Load").clicked() {
-                    // if let Some(path) = FileDialog::new().pick_file() {
-                    //     scene_events.send(SceneEvent::Load(path));
-                    // }
+                    if let Some(path) = FileDialog::new().pick_file() {
+                        scene_events.send(SceneEvent::Load(path));
+                    }
                 }
             });
+
             ui.horizontal(|ui| {
-                let mut size = String::new();
                 ui.label("Total width duration: ");
-                ui.text_edit_singleline(&mut size);
+                if ui.text_edit_singleline(size_buf.deref_mut()).changed() {
+                    println!("Changed!");
+                    if let Ok(ns) = size_buf.parse() {
+                        *scale = ns;
+                        *enabled = true;
+                    } else {
+                        *enabled = false;
+                    }
+                };
             });
-            if ui.button("Export").clicked() {
-                // if let Some(path) = FileDialog::new().pick_file() {
-                scene_events.send(SceneEvent::Export);
-                // }
-            }
+
+            ui.add_enabled_ui(*enabled, |ui| {
+                if ui.button("Export").clicked() {
+                    scene_events.send(SceneEvent::Export(*scale));
+                }
+            });
 
             ui.add_space(8.);
             ui.separator();

@@ -56,9 +56,7 @@ fn transform_hover_planet(
     mut query: Query<(&Location, &mut Transform), (With<HoverPlanet>, Changed<Location>)>,
 ) {
     if let Ok((loc, mut transform)) = query.get_single_mut() {
-        let delta_transform = config.location_to_delta(loc);
         *transform = config
-            .location_to_transform(loc, 0.1)
-            .mul_transform(delta_transform);
+            .shape_transform(loc, 0.1);
     }
 }

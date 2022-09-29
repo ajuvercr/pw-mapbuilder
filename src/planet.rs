@@ -174,6 +174,7 @@ fn spawn_named_planet(
     materials: &mut Assets<ColorMaterial>,
 ) {
     let color = data.player.color();
+    let transform = config.text_transform(&loc);
     let name = commands
         .spawn_bundle(Text2dBundle {
             text: Text::from_section(
@@ -185,23 +186,14 @@ fn spawn_named_planet(
                 },
             )
             .with_alignment(TextAlignment::CENTER),
-            transform: Transform::from_scale(Vec3 {
-                x: 0.01,
-                y: 0.01,
-                z: 1.,
-            })
-            .with_translation(Vec3 {
-                x: 0.,
-                y: -0.6,
-                z: 0.5,
-            }),
+            transform,
             visibility: Visibility { is_visible: false },
             ..default()
         })
         .insert(PlanetName)
         .id();
 
-    let transform = config.location_to_delta(&loc);
+    let transform = config.shape_transform(&loc, 0.5);
     let mesh = commands
         .spawn_bundle(MaterialMesh2dBundle {
             mesh: config.mesh().into(),
@@ -212,13 +204,12 @@ fn spawn_named_planet(
         .insert(PlanetMesh)
         .id();
 
-    let transform = config.location_to_transform(&loc, 0.5);
     commands
         .spawn()
         .insert(Visibility::default())
         .insert(ComputedVisibility::default())
         .insert(GlobalTransform::default())
-        .insert(transform)
+        .insert(Transform::default())
         .insert(loc)
         .insert(data)
         .insert(Selected(false))

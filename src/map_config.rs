@@ -5,7 +5,7 @@ use bevy::{
     sprite::Mesh2dHandle,
 };
 
-use crate::planet::{HoverPlanet, Location, PlanetEntity, PlanetMesh};
+use crate::planet::{HoverPlanet, Location, PlanetEntity, PlanetMesh, PlanetName};
 
 use serde::{Deserialize, Serialize};
 
@@ -43,13 +43,14 @@ fn handle_map_events(
 
     mut hover_planet: Query<(&mut Transform, &mut Mesh2dHandle, &Location), With<HoverPlanet>>,
 
-    mut locations: Query<
-        (&PlanetEntity, &mut Transform, &Location),
-        (Without<HoverPlanet>, Without<PlanetMesh>),
-    >,
+    mut locations: Query<(&PlanetEntity, &Location), (Without<HoverPlanet>, Without<PlanetMesh>)>,
     mut meshes: Query<
         (&mut Transform, &mut Mesh2dHandle),
-        (Without<HoverPlanet>, With<PlanetMesh>),
+        (Without<HoverPlanet>, With<PlanetMesh>, Without<PlanetName>),
+    >,
+    mut names: Query<
+        &mut Transform,
+        (Without<HoverPlanet>, With<PlanetName>, Without<PlanetMesh>),
     >,
 ) {
     let mut update_meshes = false;
@@ -68,23 +69,24 @@ fn handle_map_events(
     if update_meshes {
         let mesh_handle: Mesh2dHandle = config.mesh().into();
 
-        for (e, mut t, loc) in locations.iter_mut() {
-            // Update hover planet mesh
-            *t = config.location_to_transform(loc, 0.);
-
+        for (e, loc) in locations.iter_mut() {
             let (mut t, mut l) = meshes.get_mut(e.mesh).unwrap();
 
-            *t = config.location_to_delta(loc);
+            *t = config.shape_transform(loc, 0.5);
             *l = mesh_handle.clone();
+
+            let mut t = names.get_mut(e.name).unwrap();
+            *t = config.text_transform(loc);
         }
 
         for (mut t, mut l, loc) in hover_planet.iter_mut() {
             *l = mesh_handle.clone();
 
             *t = config
-                .location_to_transform(loc, 0.1)
-                .mul_transform(config.location_to_delta(loc));
+                .shape_transform(loc, 0.1)
+                .mul_transform(config.text_transform(loc));
         }
+
     }
 }
 
@@ -258,20 +260,30 @@ impl MapConfig {
         }
     }
 
-    pub fn location_to_delta(&self, location: &Location) -> Transform {
+    pub fn text_transform(&self, location: &Location) -> Transform {
+
         match self.ty {
-            MapType::Squares => Transform::default(),
+            MapType::Squares => Transform::default().with_translation(Vec3::new(
+                location.x as f32,
+                location.y as f32 - 0.6,
+                1.5,
+            )).with_scale(Vec3::splat(0.01)),
             MapType::Triangles => {
-                if location.x % 2 == 1 || location.x % 2 == -1 {
-                    Transform::from_matrix(Mat4::from_rotation_z(std::f32::consts::PI))
-                } else {
-                    Transform::default()
-                }
+                let mut mat = Mat4::IDENTITY;
+
+                let dx = if location.y % 2 == 0 { -1. } else { 0. };
+                mat = Mat4::from_translation(Vec3::new(
+                    (location.x as f32 + dx) * 0.5,
+                    location.y as f32 * TRIAG_HEIGHT - 0.6,
+                    0.,
+                )) * mat;
+
+                Transform::from_matrix(mat).with_scale(Vec3::splat(0.01))
             }
         }
     }
 
-    pub fn location_to_transform(&self, location: &Location, z: f32) -> Transform {
+    pub fn shape_transform(&self, location: &Location, z: f32) -> Transform {
         match self.ty {
             MapType::Squares => Transform::default().with_translation(Vec3::new(
                 location.x as f32,
@@ -288,6 +300,9 @@ impl MapConfig {
                     z,
                 )) * mat;
 
+                if location.x % 2 == 1 || location.x % 2 == -1 {
+                    mat *= Mat4::from_rotation_z(std::f32::consts::PI);
+                }
                 Transform::from_matrix(mat)
             }
         }

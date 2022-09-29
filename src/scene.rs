@@ -11,7 +11,7 @@ use crate::{
 pub enum SceneEvent {
     Save(PathBuf),
     Load(PathBuf),
-    Export,
+    Export(f32),
 }
 
 pub struct ScenePlugin;
@@ -126,7 +126,7 @@ fn handle_scene_events(
                     },
                 ));
             }
-            SceneEvent::Export => {
+            SceneEvent::Export(dist) => {
                 #[derive(Serialize)]
                 struct Planet<'a> {
                     name: &'a str,
@@ -136,14 +136,36 @@ fn handle_scene_events(
                     ship_count: usize,
                 }
 
+                let mut longest_dist = 0.0;
+                for (_, l1, _) in &planets {
+                    let t1 = current_config.shape_transform(l1, 0.);
+                    for (_, l2, _) in &planets {
+                        let t2 = current_config.shape_transform(l2, 0.);
+                        let d = (t1.translation.x - t2.translation.x).powi(2)
+                            + (t1.translation.y - t2.translation.y).powi(2);
+                        if d > longest_dist {
+                            longest_dist = d;
+                        }
+                    }
+                }
+                longest_dist = longest_dist.sqrt();
+
+                let scale = dist / longest_dist;
+
                 let planets: Vec<_> = planets
                     .iter()
-                    .map(|(data, loc, _)| Planet {
-                        name: &data.name,
-                        x: loc.x as f32,
-                        y: loc.y as f32,
-                        owner: Some(data.player.0),
-                        ship_count: data.ship_count,
+                    .map(|(data, loc, _)| {
+                        let t1 = current_config.shape_transform(loc, 0.);
+                        let x = t1.translation.x;
+                        let y = t1.translation.y;
+
+                        Planet {
+                            name: &data.name,
+                            x: x * scale,
+                            y: y * scale,
+                            owner: Some(data.player.0),
+                            ship_count: data.ship_count,
+                        }
                     })
                     .collect();
 

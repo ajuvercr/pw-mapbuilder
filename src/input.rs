@@ -132,6 +132,7 @@ pub fn change_bg_color(
     if hovering_ui.0 {
         return;
     }
+
     if input.just_pressed(KeyCode::A) {
         writer.send(MapEvent::SetColor(Color::BLUE));
     }
