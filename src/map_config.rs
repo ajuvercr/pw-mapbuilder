@@ -48,10 +48,7 @@ fn handle_map_events(
         (&mut Transform, &mut Mesh2dHandle),
         (Without<HoverPlanet>, With<PlanetMesh>, Without<PlanetName>),
     >,
-    mut names: Query<
-        &mut Transform,
-        (Without<HoverPlanet>, With<PlanetName>, Without<PlanetMesh>),
-    >,
+    mut names: Query<&mut Transform, (Without<HoverPlanet>, With<PlanetName>, Without<PlanetMesh>)>,
 ) {
     let mut update_meshes = false;
     for event in reader.iter() {
@@ -86,7 +83,6 @@ fn handle_map_events(
                 .shape_transform(loc, 0.1)
                 .mul_transform(config.text_transform(loc));
         }
-
     }
 }
 
@@ -261,13 +257,10 @@ impl MapConfig {
     }
 
     pub fn text_transform(&self, location: &Location) -> Transform {
-
         match self.ty {
-            MapType::Squares => Transform::default().with_translation(Vec3::new(
-                location.x as f32,
-                location.y as f32 - 0.6,
-                1.5,
-            )).with_scale(Vec3::splat(0.01)),
+            MapType::Squares => Transform::default()
+                .with_translation(Vec3::new(location.x as f32, location.y as f32 - 0.6, 1.5))
+                .with_scale(Vec3::splat(0.01)),
             MapType::Triangles => {
                 let mut mat = Mat4::IDENTITY;
 

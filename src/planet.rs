@@ -8,7 +8,7 @@ use petname::Petnames;
 use serde::{Deserialize, Serialize};
 
 use crate::map_config::MapConfig;
-use crate::utils;
+use crate::{utils, eprintit};
 
 pub const COLORS: [Color32; 7] = [
     Color32::GRAY,
@@ -238,7 +238,7 @@ fn align_planet_name(
         if let Ok(mut t) = texts.get_mut(e.name) {
             t.sections[0].value = d.name.clone();
         } else {
-            eprintln!("No such entity found!");
+            eprintit!("No such entity found!");
         }
     }
 }

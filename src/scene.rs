@@ -1,24 +1,24 @@
-use std::path::PathBuf;
-
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    eprintit,
     map_config::{MapConfig, MapEvent, MapType},
     planet::{Location, PlanetData, PlanetEvent},
 };
 
 pub enum SceneEvent {
-    Save(PathBuf),
-    Load(PathBuf),
+    Save,
+    Load,
+    LoadCont(String),
     Export(f32),
 }
 
 pub struct ScenePlugin;
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        println!("Here");
         app.add_event::<SceneEvent>()
+            .add_plugin(io::IOPlugin)
             .add_system(handle_scene_events);
     }
 }
@@ -39,39 +39,6 @@ struct Scene {
     planets: Vec<ScenePlanet>,
 }
 
-mod io {
-    use std::{
-        fs::File,
-        io::{Read, Write},
-        path::PathBuf,
-    };
-
-    use serde::Deserialize;
-
-    pub fn write_to_file(contents: &[u8], location: &PathBuf) -> Result<(), std::io::Error> {
-        let mut file = File::options()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(location)?;
-        file.write_all(contents)?;
-        Ok(())
-    }
-
-    pub fn read_from_file<T: for<'a> Deserialize<'a>>(
-        location: &PathBuf,
-    ) -> Result<T, std::io::Error> {
-        let mut file = File::open(location)?;
-        let mut buf = Vec::new();
-        file.read_to_end(&mut buf)?;
-
-        match serde_json::from_slice(&buf) {
-            Ok(x) => Ok(x),
-            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-        }
-    }
-}
-
 fn handle_scene_events(
     mut commands: Commands,
     planets: Query<(&PlanetData, &Location, Entity)>,
@@ -83,7 +50,7 @@ fn handle_scene_events(
 ) {
     for event in events.iter() {
         match event {
-            SceneEvent::Save(location) => {
+            SceneEvent::Save => {
                 let planets = planets
                     .iter()
                     .map(|(x, y, _)| ScenePlanet {
@@ -99,32 +66,9 @@ fn handle_scene_events(
                     planets,
                     config: scene_config,
                 };
-                let data = serde_json::to_vec_pretty(&scene).unwrap();
-                if let Err(e) = io::write_to_file(&data, location) {
-                    eprintln!("Error {:?}", e);
-                }
-            }
-            SceneEvent::Load(location) => {
-                planets
-                    .iter()
-                    .map(|(_, _, e)| e)
-                    .for_each(|e| commands.entity(e).despawn_recursive());
+                let data = serde_json::to_string_pretty(&scene).unwrap();
 
-                let Scene { planets, config } = match io::read_from_file(location) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        eprintln!("Error {:?}", e);
-                        return;
-                    }
-                };
-
-                map_events.send(MapEvent::SetType(config.ty));
-                planet_events.send_batch(planets.into_iter().map(
-                    |ScenePlanet { data, location }| PlanetEvent::CreateNamed {
-                        loc: location,
-                        data,
-                    },
-                ));
+                io::save(data);
             }
             SceneEvent::Export(dist) => {
                 #[derive(Serialize)]
@@ -169,8 +113,192 @@ fn handle_scene_events(
                     })
                     .collect();
 
-                println!("{}", serde_json::json!({ "planets": planets }));
+                let content = serde_json::json!({ "planets": planets }).to_string();
+                io::export(content);
+            }
+            SceneEvent::Load => {
+                if let Some(data) = io::load() {
+                    load_cont(
+                        &data,
+                        &planets,
+                        &mut commands,
+                        &mut map_events,
+                        &mut planet_events,
+                    );
+                }
+            }
+            SceneEvent::LoadCont(data) => load_cont(
+                data,
+                &planets,
+                &mut commands,
+                &mut map_events,
+                &mut planet_events,
+            ),
+        }
+    }
+}
+
+fn load_cont(
+    data: &str,
+    planets: &Query<(&PlanetData, &Location, Entity)>,
+    commands: &mut Commands,
+    map_events: &mut EventWriter<MapEvent>,
+    planet_events: &mut EventWriter<PlanetEvent>,
+) {
+    let Scene {
+        planets: p2,
+        config,
+    } = match serde_json::from_str(data) {
+        Ok(x) => x,
+        Err(e) => {
+            eprintit!("Error: {}", e);
+            return;
+        }
+    };
+
+    planets
+        .iter()
+        .map(|(_, _, e)| e)
+        .for_each(|e| commands.entity(e).despawn_recursive());
+    map_events.send(MapEvent::SetType(config.ty));
+    planet_events.send_batch(p2.into_iter().map(|ScenePlanet { data, location }| {
+        PlanetEvent::CreateNamed {
+            loc: location,
+            data,
+        }
+    }));
+}
+
+#[cfg(not(target_family = "wasm"))]
+mod io {
+    use bevy::{
+        prelude::Plugin,
+        tasks::IoTaskPool,
+    };
+    use rfd::{AsyncFileDialog, FileDialog};
+
+    use std::{
+        fs::File,
+        io::{Read, Write},
+        path::Path,
+    };
+
+    pub struct IOPlugin;
+    impl Plugin for IOPlugin {
+        fn build(&self, _app: &mut bevy::prelude::App) {}
+    }
+
+    pub fn write_to_file(contents: &[u8], location: &Path) -> Result<(), std::io::Error> {
+        let mut file = File::options()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(location)?;
+        file.write_all(contents)?;
+        Ok(())
+    }
+
+    pub fn read_from_file(location: &Path) -> Result<String, std::io::Error> {
+        let mut file = File::open(location)?;
+        let mut buf = String::new();
+        file.read_to_string(&mut buf)?;
+
+        Ok(buf)
+    }
+
+    pub fn save(content: String) {
+        let thread_pool = IoTaskPool::get();
+        thread_pool
+            .spawn(async move {
+                if let Some(path) = AsyncFileDialog::new().save_file().await {
+                    write_to_file(content.as_bytes(), path.path()).unwrap();
+                }
+            })
+            .detach();
+    }
+
+    pub fn load() -> Option<String> {
+        if let Some(path) = FileDialog::new().pick_file() {
+            read_from_file(&path).ok()
+        } else {
+            None
+        }
+    }
+
+    pub fn export(content: String) {
+        let thread_pool = IoTaskPool::get();
+        thread_pool
+            .spawn(async move {
+                if let Some(path) = AsyncFileDialog::new().save_file().await {
+                    write_to_file(content.as_bytes(), path.path()).unwrap();
+                }
+            })
+            .detach();
+    }
+}
+
+#[cfg(target_family = "wasm")]
+mod io {
+    use std::sync::Mutex;
+
+    use bevy::prelude::{EventWriter, Plugin};
+    use wasm_bindgen::prelude::wasm_bindgen;
+
+    use super::SceneEvent;
+
+    mod js {
+        use wasm_bindgen::prelude::wasm_bindgen;
+
+        #[wasm_bindgen]
+        extern "C" {
+            #[wasm_bindgen(js_namespace = console)]
+            pub fn log(s: &str);
+
+            #[wasm_bindgen(js_namespace = ["window", "scene"])]
+            pub fn save(s: &str);
+
+            #[wasm_bindgen(js_namespace = ["window", "scene"])]
+            pub fn load();
+
+            #[wasm_bindgen(js_namespace = ["window", "scene"])]
+            pub fn exp(s: &str);
+        }
+    }
+
+    pub struct IOPlugin;
+    impl Plugin for IOPlugin {
+        fn build(&self, app: &mut bevy::prelude::App) {
+            app.add_system(complete_load);
+        }
+    }
+
+    fn complete_load(mut ev: EventWriter<SceneEvent>) {
+        if let Ok(mut x) = LOAD.lock() {
+            if let Some(st) = x.take() {
+                ev.send(SceneEvent::LoadCont(st));
             }
         }
+    }
+
+    pub fn save(content: String) {
+        js::save(&content);
+    }
+
+    static LOAD: Mutex<Option<String>> = Mutex::new(None);
+
+    pub fn load() -> Option<String> {
+        js::load();
+        None
+    }
+
+    #[wasm_bindgen]
+    pub fn finish_load(st: &str) {
+        if let Ok(mut x) = LOAD.lock() {
+            *x = Some(st.to_string());
+        }
+    }
+
+    pub fn export(content: String) {
+        js::exp(&content);
     }
 }

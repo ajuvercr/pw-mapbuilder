@@ -55,12 +55,12 @@ pub fn mouse_events(
         let amount = if event.unit == MouseScrollUnit::Line {
             10.
         } else {
-            1.
+            5.
         };
 
-        let z = config.zoom;
 
-        config.set_zoom(z + event.y * amount);
+        let z = config.zoom;
+        config.set_zoom(z + event.y.signum() * amount);
 
         for mut cam_trans in cameras.iter_mut() {
             *cam_trans = cam_trans.with_scale(Vec3::new(1. / config.zoom, 1. / config.zoom, 1.));
@@ -99,7 +99,7 @@ pub fn world_move(
         changed = true;
     }
 
-    if input.pressed(KeyCode::D)|| input.pressed(KeyCode::Right) {
+    if input.pressed(KeyCode::D) || input.pressed(KeyCode::Right) {
         translate.x += delta;
         changed = true;
     }

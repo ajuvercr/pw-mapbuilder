@@ -10,9 +10,12 @@ use egui::{
     pos2, Color32, Rect, Response, RichText, Rounding, Sense, Shape, Stroke, TextureId, Ui, Vec2,
     Widget, WidgetWithState,
 };
-use rfd::FileDialog;
 // use rfd::FileDialog;
-use std::{hash::Hash, ops::DerefMut};
+use std::{
+    hash::Hash,
+    ops::DerefMut,
+    sync::mpsc::{sync_channel, Receiver, SyncSender},
+};
 
 use crate::FPS;
 
@@ -217,6 +220,14 @@ fn color_option(ui: &mut Ui, color: Color32, size: Vec2, active: bool) -> Respon
     response
 }
 
+struct SceneChannel(SyncSender<SceneEvent>, Receiver<SceneEvent>);
+impl Default for SceneChannel {
+    fn default() -> Self {
+        let (s, r) = sync_channel(5);
+        Self(s, r)
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn ui_editor(
     mut egui_context: ResMut<EguiContext>,
@@ -237,21 +248,17 @@ pub fn ui_editor(
             ui.add_space(8.);
             ui.horizontal(|ui| {
                 if ui.button("Save").clicked() {
-                    if let Some(path) = FileDialog::new().save_file() {
-                        scene_events.send(SceneEvent::Save(path));
-                    }
+                    scene_events.send(SceneEvent::Save);
                 }
+
                 if ui.button("Load").clicked() {
-                    if let Some(path) = FileDialog::new().pick_file() {
-                        scene_events.send(SceneEvent::Load(path));
-                    }
+                    scene_events.send(SceneEvent::Load);
                 }
             });
 
             ui.horizontal(|ui| {
-                ui.label("Total width duration: ");
+                ui.label("Furthus expedition in turns: ");
                 if ui.text_edit_singleline(size_buf.deref_mut()).changed() {
-                    println!("Changed!");
                     if let Ok(ns) = size_buf.parse() {
                         *scale = ns;
                         *enabled = true;

@@ -1,5 +1,7 @@
 use bevy::{prelude::*, window::PresentMode};
 use bevy_egui::EguiPlugin;
+
+#[cfg(not(target_family = "wasm"))]
 use bevy_framepace::{FramepaceSettings, Limiter};
 use mapbuilder::{
     self, input,
@@ -35,6 +37,7 @@ fn main() {
     app.run();
 }
 
+#[cfg(not(target_family = "wasm"))]
 fn setup_framepace_settings(mut settings: ResMut<FramepaceSettings>) {
     settings.limiter = Limiter::from_framerate(120.);
 }
@@ -56,7 +59,6 @@ fn transform_hover_planet(
     mut query: Query<(&Location, &mut Transform), (With<HoverPlanet>, Changed<Location>)>,
 ) {
     if let Ok((loc, mut transform)) = query.get_single_mut() {
-        *transform = config
-            .shape_transform(loc, 0.1);
+        *transform = config.shape_transform(loc, 0.1);
     }
 }
