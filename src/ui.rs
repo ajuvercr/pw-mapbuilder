@@ -257,7 +257,7 @@ pub fn ui_editor(
             });
 
             ui.horizontal(|ui| {
-                ui.label("Furthus expedition in turns: ");
+                ui.label("Longest expedition in turns: ");
                 if ui.text_edit_singleline(size_buf.deref_mut()).changed() {
                     if let Ok(ns) = size_buf.parse() {
                         *scale = ns;
