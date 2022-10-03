@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:,">
+    <title>{{ TITLE }}</title>
+
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+
+<body>
+    <input type='file' style="display: hidden" id="file1" />
+    <input type='file' style="display: hidden" id="file2" />
+    <input type='file' style="display: hidden" id="file3" />
+
+    <script type="module">
+        import {save, exp, load} from "./script.js";
+        window.scene = {
+            save, exp, load
+        }
+        import init from "./out/mapbuilder.js";
+        import {finish_load} from "./out/mapbuilder.js";
+
+        async function run() {
+            const wasm = await init();
+            console.log(wasm);
+        }
+
+        window.scene.finish_load = finish_load;
+        run();
+    </script>
+
+    <script>
+        document.body.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    </script>
+</body>
+
+</html>
