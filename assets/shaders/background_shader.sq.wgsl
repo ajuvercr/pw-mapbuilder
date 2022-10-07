@@ -32,7 +32,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.clip_position = vec4<f32>(vertex.position, 1.0);
 
     let uv = vec2<f32>(vertex.position.x * config.width * 0.5 - config.x, vertex.position.y * config.height * 0.5 - config.y);
-    out.position = vec2<f32>(uv / config.zoom);// + vec2(0.5, 0.45);
+    out.position = vec2<f32>(uv / config.zoom) + vec2(0.5);
     return out;
 }
 
@@ -42,8 +42,7 @@ struct FragmentInput {
 };
 
 fn  plot(st: f32, pct: f32) -> f32{
-  return  smoothstep( pct - 0.04 , pct, st) -
-          smoothstep( pct, pct + 0.04, st);
+    return step(abs(st), 0.01);
 }
 
 /// Entry point for the fragment shader
@@ -51,14 +50,13 @@ fn  plot(st: f32, pct: f32) -> f32{
 fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
     var  W: f32 = 0.1;
 
-    var frac: vec2<f32> =min( min( abs(fract(in.position + 0.5 + vec2(W)) - vec2(W) )
-    ,  abs(fract(in.position + 0.51 + vec2(W)) - vec2(W) )),
-      abs(fract(in.position + 0.49 + vec2(W)) - vec2(W) )); 
+    var hor = fract(in.position.y - 0.005);
+    var vert = fract(in.position.x - 0.005);
+    var l = max(hor, vert);
 
-    var is_border: f32 = min(frac.x, frac.y) ;
+    var b = plot(1.0 - l, 0.0);
 
-    var b = plot(is_border, 0.0);
-    var bt = 1.0 - b;
+    var bt = 1.0 -  b;
     return b * vec4(config.cx,config.cy,config.cz, 1.0) + bt * vec4(0.0, 0.0, 0.0, 1.0);
 }
 

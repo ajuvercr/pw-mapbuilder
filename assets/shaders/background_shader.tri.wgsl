@@ -44,8 +44,7 @@ struct FragmentInput {
 };
 
 fn  plot(st: f32, pct: f32) -> f32{
-  return  smoothstep( pct - 0.04 , pct, st) -
-          smoothstep( pct, pct + 0.04, st);
+    return step(abs(st), 0.01);
 }
 
 fn rotate(input: vec2<f32>, a: f32) -> vec2<f32> {
@@ -65,15 +64,15 @@ fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
     var d1 = rotate(vec2(in.position.x, in.position.y), 60.0 * 3.141592 / 180.);
     var d2 = rotate(vec2(in.position.x, in.position.y), 120.0 * 3.141592 / 180.);
 
-    var hor = abs(fract(in.position.y / t_height + 0.5) - 0.5);
-    var d1_r = abs(fract(d1.y / t_height + 0.5) - 0.5);
-    var d2_r = abs(fract(d2.y/ t_height + 0.5) - 0.5);
+    var hor = fract(in.position.y / t_height - 0.005);
+    var d1_r = fract(d1.y / t_height - 0.005);
+    var d2_r = fract(d2.y/ t_height  - 0.005);
 
-    var l = min(hor, min(d1_r, d2_r));
+    var l = max(hor, max(d1_r, d2_r));
 
-    var b = plot(l, 0.0);
+    var b = plot(1.0 - l, 0.0);
 
-    var bt = 1.0 - b;
+    var bt = 1.0 -  b;
     return b * vec4(config.cx,config.cy,config.cz, 1.0) + bt * vec4(0.0, 0.0, 0.0, 1.0);
 }
 
