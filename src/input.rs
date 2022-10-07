@@ -142,11 +142,15 @@ pub fn change_bg_color(
     }
 
     if input.just_pressed(KeyCode::Z) {
-        writer.send(MapEvent::SetType(MapType::Squares));
+        writer.send(MapEvent::SetType(MapType::Triangles));
     }
 
     if input.just_pressed(KeyCode::X) {
-        writer.send(MapEvent::SetType(MapType::Triangles));
+        writer.send(MapEvent::SetType(MapType::Squares));
+    }
+
+    if input.just_pressed(KeyCode::C) {
+        writer.send(MapEvent::SetType(MapType::Hexagons));
     }
 }
 

@@ -35,6 +35,7 @@ struct Icons {
     handles: Vec<Handle<Image>>,
     squares: TextureId,
     triangles: TextureId,
+    hexagons: TextureId,
 }
 
 fn load_images(
@@ -47,6 +48,10 @@ fn load_images(
     icons.handles.push(sq);
     let tri = asset_server.load("icons/triangle.png");
     icons.triangles = ctx.add_image(tri.clone_weak());
+    icons.handles.push(tri);
+
+    let tri = asset_server.load("icons/hexagon.png");
+    icons.hexagons = ctx.add_image(tri.clone_weak());
     icons.handles.push(tri);
 }
 
@@ -392,6 +397,17 @@ fn ui_system(
                         && config.ty != MapType::Squares
                     {
                         writer.send(MapEvent::SetType(MapType::Squares));
+                    }
+
+                    if ui
+                        .add(IconButton {
+                            id: icons.hexagons,
+                            selected: config.ty == MapType::Hexagons,
+                        })
+                        .clicked()
+                        && config.ty != MapType::Hexagons
+                    {
+                        writer.send(MapEvent::SetType(MapType::Hexagons));
                     }
 
                     ui.separator();
