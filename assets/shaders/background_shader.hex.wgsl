@@ -32,7 +32,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.clip_position = vec4<f32>(vertex.position, 1.0);
 
     let uv = vec2<f32>(vertex.position.x * config.width * 0.5 - config.x, vertex.position.y * config.height * 0.5 - config.y);
-    out.position = vec2<f32>(uv / config.zoom) + vec2(0.5);
+    out.position = vec2<f32>(uv / config.zoom);
+
+    out.position.x = out.position.x - 1.;
     return out;
 }
 
@@ -45,18 +47,47 @@ fn  plot(st: f32, pct: f32) -> f32{
     return step(abs(st), 0.01);
 }
 
-/// Entry point for the fragment shader
+
+fn dashed(f: f32) -> f32 {
+    var len = 2. * (1. + 0.5);
+
+    var per = fract(f / len);
+    return step(per, 1. / len);
+}
+
+fn dashed_twice(st: vec2<f32>) -> f32 {
+    var t_height = 2.0 * sin(radians(60.));
+
+    var l1 = dashed(st.x) * fract(st.y  / t_height - 0.005) ;
+    var l2 = dashed(st.x + 1.5) * fract(st.y / t_height + 0.5 - 0.005);
+
+    return max(l1, l2);
+}
+
+fn rotate(input: vec2<f32>, a: f32) -> vec2<f32> {
+    var c = cos(a);
+    var s = sin(a);
+    return vec2(
+        c * input.x + s * input.y,
+        -s * input.x + c * input.y
+    );
+}
+
 @fragment
 fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
-    var  W: f32 = 0.1;
+    var dp1 = rotate(vec2(in.position.x, in.position.y), radians(240.0));
+    var dp2 = rotate(vec2(in.position.x, in.position.y), radians(120.0));
 
-    var hor = fract(in.position.y - 0.005);
-    var vert = fract(in.position.x - 0.005);
-    var l = max(hor, vert);
+    var h1 = dashed_twice(in.position);
+    var d1 = dashed_twice(dp1);
+    var d2 = dashed_twice(dp2);
+
+    var l = max(max(h1, d1), d2 );
 
     var b = plot(1.0 - l, 0.0);
 
-    var bt = 1.0 -  b;
+    var bt = 1.0 - b;
     return b * vec4(config.cx,config.cy,config.cz, 1.0) + bt * vec4(0.0, 0.0, 0.0, 1.0);
 }
+
 
