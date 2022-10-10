@@ -1,4 +1,4 @@
-use bevy::{prelude::*, window::PresentMode};
+use bevy::{prelude::*, window::PresentMode, sprite::Mesh2dHandle};
 use bevy_egui::EguiPlugin;
 
 #[cfg(not(target_family = "wasm"))]
@@ -56,9 +56,10 @@ fn setup(mut commands: Commands, config: Res<MapConfig>) {
 
 fn transform_hover_planet(
     config: Res<MapConfig>,
-    mut query: Query<(&Location, &mut Transform), (With<HoverPlanet>, Changed<Location>)>,
+    mut query: Query<(&Location, &mut Transform, &mut Mesh2dHandle), (With<HoverPlanet>, Changed<Location>)>,
 ) {
-    if let Ok((loc, mut transform)) = query.get_single_mut() {
+    if let Ok((loc, mut transform, mut mesh)) = query.get_single_mut() {
         *transform = config.shape_transform(loc, 0.1);
+        *mesh = config.mesh(loc).into();
     }
 }

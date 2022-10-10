@@ -1,3 +1,4 @@
+
 struct Config {
     x: f32,
     y: f32,
@@ -31,9 +32,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.clip_position = vec4<f32>(vertex.position, 1.0);
 
     let uv = vec2<f32>(vertex.position.x * config.width * 0.5 - config.x, vertex.position.y * config.height * 0.5 - config.y);
-    out.position = vec2<f32>(uv / config.zoom);
-    var t_height = 0.8660254;
-    out.position.y = out.position.y + t_height * 0.5;
+    out.position = vec2<f32>(uv / config.zoom) + vec2(0.5);
+    out.position.x = out.position.x - 1.;
     return out;
 }
 
@@ -46,33 +46,23 @@ fn  plot(st: f32, pct: f32) -> f32{
     return step(abs(st), 0.01);
 }
 
-fn rotate(input: vec2<f32>, a: f32) -> vec2<f32> {
-    var c = cos(a);
-    var s = sin(a);
-    return vec2(
-        c * input.x + s * input.y,
-        -s * input.x + c * input.y
-    );
-}
-
+/// Entry point for the fragment shader
 @fragment
 fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
-    var t_height = 0.8660254;
-    var fi = fract(in.position);
+    var  W: f32 = 0.1;
 
-    var d1 = rotate(vec2(in.position.x, in.position.y), 60.0 * 3.141592 / 180.);
-    var d2 = rotate(vec2(in.position.x, in.position.y), 120.0 * 3.141592 / 180.);
+    var fra = fract(in.position);
+    var centered = abs(fra - vec2(0.5));
 
-    var hor = fract(in.position.y / t_height - 0.005);
-    var d1_r = fract(d1.y / t_height - 0.005);
-    var d2_r = fract(d2.y/ t_height  - 0.005);
+    var target_y = 0.7 / 2.414 - centered.x;
+    var diff_y = target_y - centered.y;
+    var v = step(abs(diff_y), 0.01);
 
-    var l = max(hor, max(d1_r, d2_r));
+    var h = f32(diff_y < 0.) * (step(centered.x, 0.005) + step(centered.y, 0.005));
 
-    var b = plot(1.0 - l, 0.0);
+    var l = max(v, h);
 
-    var bt = 1.0 -  b;
-    return b * vec4(config.cx,config.cy,config.cz, 1.0) + bt * vec4(0.0, 0.0, 0.0, 1.0);
+    var bt = 1.0 - l;
+    return l * vec4(config.cx,config.cy,config.cz, 1.0) + bt * vec4(0.0, 0.0, 0.0, 1.0);
 }
-
 

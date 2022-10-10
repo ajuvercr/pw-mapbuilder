@@ -315,6 +315,7 @@ pub struct BGShader {
     squares: (Option<Shader>, Handle<Shader>),
     triangles: (Option<Shader>, Handle<Shader>),
     hexagons: (Option<Shader>, Handle<Shader>),
+    octagons: (Option<Shader>, Handle<Shader>),
     current_type: Option<MapType>,
 }
 
@@ -340,6 +341,11 @@ fn set_bg_shaders(
                     let shader = assets.get(handle).unwrap().clone();
                     bg_shader.hexagons.0 = Some(shader);
                 }
+
+                if handle.id == bg_shader.octagons.1.id {
+                    let shader = assets.get(handle).unwrap().clone();
+                    bg_shader.octagons.0 = Some(shader);
+                }
             }
             _ => {}
         }
@@ -358,19 +364,29 @@ fn update_bg_current_shader(
     };
 
     if changed {
-        let success = match (config.ty, &bg_shader.squares, &bg_shader.triangles, &bg_shader.hexagons) {
-            (MapType::Squares, (Some(s), _), _, _) => {
+        let success = match (
+            config.ty,
+            &bg_shader.squares,
+            &bg_shader.triangles,
+            &bg_shader.hexagons,
+            &bg_shader.octagons,
+        ) {
+            (MapType::Squares, (Some(s), _), _, _, _) => {
                 assets.set_untracked(&bg_shader.current, s.clone());
                 true
             }
-            (MapType::Triangles, _, (Some(s), _), _) => {
+            (MapType::Triangles, _, (Some(s), _), _, _) => {
                 assets.set_untracked(&bg_shader.current, s.clone());
                 true
-            },
-            (MapType::Hexagons, _, _, (Some(s), _)) => {
+            }
+            (MapType::Hexagons, _, _, (Some(s), _), _) => {
                 assets.set_untracked(&bg_shader.current, s.clone());
                 true
-            },
+            }
+            (MapType::Octagons, _, _, _, (Some(s), _)) => {
+                assets.set_untracked(&bg_shader.current, s.clone());
+                true
+            }
             _ => false,
         };
 
@@ -403,6 +419,7 @@ impl Plugin for BackgroundPlugin {
             let squares: Handle<Shader> = asset_server.load("shaders/background_shader.sq.wgsl");
             let triangles: Handle<Shader> = asset_server.load("shaders/background_shader.tri.wgsl");
             let hexagons: Handle<Shader> = asset_server.load("shaders/background_shader.hex.wgsl");
+            let octagons: Handle<Shader> = asset_server.load("shaders/background_shader.oct.wgsl");
 
             let current = Handle::weak(HandleId::random::<Shader>());
             BGShader {
@@ -410,6 +427,7 @@ impl Plugin for BackgroundPlugin {
                 squares: (None, squares),
                 triangles: (None, triangles),
                 hexagons: (None, hexagons),
+                octagons: (None, octagons),
                 current_type: None,
             }
         };

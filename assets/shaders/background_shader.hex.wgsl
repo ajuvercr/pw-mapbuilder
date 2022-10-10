@@ -34,7 +34,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let uv = vec2<f32>(vertex.position.x * config.width * 0.5 - config.x, vertex.position.y * config.height * 0.5 - config.y);
     out.position = vec2<f32>(uv / config.zoom);
 
-    out.position.x = out.position.x - 1.;
+    out.position.x = out.position.x - 1.0;
     return out;
 }
 

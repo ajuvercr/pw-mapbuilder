@@ -8,7 +8,7 @@ use petname::Petnames;
 use serde::{Deserialize, Serialize};
 
 use crate::map_config::MapConfig;
-use crate::{utils, eprintit};
+use crate::{eprintit, utils};
 
 pub const COLORS: [Color32; 7] = [
     Color32::GRAY,
@@ -41,7 +41,7 @@ fn setup(
     color.set_a(0.4);
     commands
         .spawn_bundle(MaterialMesh2dBundle {
-            mesh: config.mesh().into(),
+            mesh: config.mesh(&Location { x: 0, y: 0 }).into(),
             material: materials.add(ColorMaterial::from(color)),
             ..default()
         })
@@ -196,7 +196,7 @@ fn spawn_named_planet(
     let transform = config.shape_transform(&loc, 0.5);
     let mesh = commands
         .spawn_bundle(MaterialMesh2dBundle {
-            mesh: config.mesh().into(),
+            mesh: config.mesh(&loc).into(),
             material: materials.add(ColorMaterial::from(color)),
             transform,
             ..default()
