@@ -1,4 +1,3 @@
-
 struct Config {
     x: f32,
     y: f32,
