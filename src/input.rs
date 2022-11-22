@@ -58,7 +58,6 @@ pub fn mouse_events(
             5.
         };
 
-
         let z = config.zoom;
         config.set_zoom(z + event.y.signum() * amount);
 

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     eprintit,
@@ -12,6 +13,7 @@ pub enum SceneEvent {
     Load,
     LoadCont(String),
     Export(f32),
+    Upload(f32, String),
 }
 
 pub struct ScenePlugin;
@@ -37,6 +39,56 @@ struct SceneConfig {
 struct Scene {
     config: SceneConfig,
     planets: Vec<ScenePlanet>,
+}
+
+fn get_planets_export(
+    dist: f32,
+    planets: &Query<(&PlanetData, &Location, Entity)>,
+    current_config: &MapConfig,
+) -> Value {
+    #[derive(Serialize)]
+    struct Planet<'a> {
+        name: &'a str,
+        x: f32,
+        y: f32,
+        owner: Option<usize>,
+        ship_count: usize,
+    }
+
+    let mut longest_dist = 0.0;
+    for (_, l1, _) in planets {
+        let t1 = current_config.shape_transform(l1, 0.);
+        for (_, l2, _) in planets {
+            let t2 = current_config.shape_transform(l2, 0.);
+            let d = (t1.translation.x - t2.translation.x).powi(2)
+                + (t1.translation.y - t2.translation.y).powi(2);
+            if d > longest_dist {
+                longest_dist = d;
+            }
+        }
+    }
+    longest_dist = longest_dist.sqrt();
+
+    let scale = dist / longest_dist;
+
+    let planets: Vec<_> = planets
+        .iter()
+        .map(|(data, loc, _)| {
+            let t1 = current_config.shape_transform(loc, 0.);
+            let x = t1.translation.x;
+            let y = t1.translation.y;
+
+            Planet {
+                name: &data.name,
+                x: x * scale,
+                y: y * scale,
+                owner: Some(data.player.0),
+                ship_count: data.ship_count,
+            }
+        })
+        .collect();
+
+    serde_json::json!({ "planets": planets })
 }
 
 fn handle_scene_events(
@@ -71,49 +123,7 @@ fn handle_scene_events(
                 io::save(data);
             }
             SceneEvent::Export(dist) => {
-                #[derive(Serialize)]
-                struct Planet<'a> {
-                    name: &'a str,
-                    x: f32,
-                    y: f32,
-                    owner: Option<usize>,
-                    ship_count: usize,
-                }
-
-                let mut longest_dist = 0.0;
-                for (_, l1, _) in &planets {
-                    let t1 = current_config.shape_transform(l1, 0.);
-                    for (_, l2, _) in &planets {
-                        let t2 = current_config.shape_transform(l2, 0.);
-                        let d = (t1.translation.x - t2.translation.x).powi(2)
-                            + (t1.translation.y - t2.translation.y).powi(2);
-                        if d > longest_dist {
-                            longest_dist = d;
-                        }
-                    }
-                }
-                longest_dist = longest_dist.sqrt();
-
-                let scale = dist / longest_dist;
-
-                let planets: Vec<_> = planets
-                    .iter()
-                    .map(|(data, loc, _)| {
-                        let t1 = current_config.shape_transform(loc, 0.);
-                        let x = t1.translation.x;
-                        let y = t1.translation.y;
-
-                        Planet {
-                            name: &data.name,
-                            x: x * scale,
-                            y: y * scale,
-                            owner: Some(data.player.0),
-                            ship_count: data.ship_count,
-                        }
-                    })
-                    .collect();
-
-                let content = serde_json::json!({ "planets": planets }).to_string();
+                let content = get_planets_export(*dist, &planets, &current_config).to_string();
                 io::export(content);
             }
             SceneEvent::Load => {
@@ -134,6 +144,10 @@ fn handle_scene_events(
                 &mut map_events,
                 &mut planet_events,
             ),
+            SceneEvent::Upload(dist, url) => {
+                let content = get_planets_export(*dist, &planets, &current_config).to_string();
+                io::upload(url, content);
+            }
         }
     }
 }
@@ -171,10 +185,7 @@ fn load_cont(
 
 #[cfg(not(target_family = "wasm"))]
 mod io {
-    use bevy::{
-        prelude::Plugin,
-        tasks::IoTaskPool,
-    };
+    use bevy::{prelude::Plugin, tasks::IoTaskPool};
     use rfd::{AsyncFileDialog, FileDialog};
 
     use std::{
@@ -235,6 +246,10 @@ mod io {
             })
             .detach();
     }
+
+    pub fn upload(url: &str, content: String) {
+        todo!()
+    }
 }
 
 #[cfg(target_family = "wasm")]
@@ -262,6 +277,9 @@ mod io {
 
             #[wasm_bindgen(js_namespace = ["window", "scene"])]
             pub fn exp(s: &str);
+
+            #[wasm_bindgen(js_namespace = ["window", "scene"])]
+            pub fn upload(url: &str, content: &str);
         }
     }
 
@@ -300,5 +318,9 @@ mod io {
 
     pub fn export(content: String) {
         js::exp(&content);
+    }
+
+    pub fn upload(url: &str, content: String) {
+        js::upload(url, &content);
     }
 }

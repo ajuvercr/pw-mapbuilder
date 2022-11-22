@@ -1,4 +1,4 @@
-use bevy::{prelude::*, window::PresentMode, sprite::Mesh2dHandle};
+use bevy::{prelude::*, sprite::Mesh2dHandle, window::PresentMode};
 use bevy_egui::EguiPlugin;
 
 #[cfg(not(target_family = "wasm"))]
@@ -16,6 +16,10 @@ fn main() {
 
     app.insert_resource(WindowDescriptor {
         present_mode: PresentMode::AutoNoVsync,
+        #[cfg(target_family = "wasm")]
+        canvas: Some(String::from(".bevy-instance")),
+        #[cfg(target_family = "wasm")]
+        fit_canvas_to_parent: true,
         ..default()
     })
     .add_plugins(DefaultPlugins)
@@ -56,7 +60,10 @@ fn setup(mut commands: Commands, config: Res<MapConfig>) {
 
 fn transform_hover_planet(
     config: Res<MapConfig>,
-    mut query: Query<(&Location, &mut Transform, &mut Mesh2dHandle), (With<HoverPlanet>, Changed<Location>)>,
+    mut query: Query<
+        (&Location, &mut Transform, &mut Mesh2dHandle),
+        (With<HoverPlanet>, Changed<Location>),
+    >,
 ) {
     if let Ok((loc, mut transform, mut mesh)) = query.get_single_mut() {
         *transform = config.shape_transform(loc, 0.1);

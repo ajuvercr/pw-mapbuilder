@@ -26,6 +26,7 @@ impl Plugin for UIPlugin {
             .add_system(ui_system)
             .init_resource::<Icons>()
             .add_startup_system(load_images)
+            .add_startup_system(set_font_sizes)
             .insert_resource(HoveringUI(false));
     }
 }
@@ -37,6 +38,24 @@ struct Icons {
     triangles: TextureId,
     hexagons: TextureId,
     octagons: TextureId,
+}
+
+fn set_font_sizes(mut egui_context: ResMut<EguiContext>) {
+    use egui::FontFamily::Proportional;
+    use egui::FontId;
+    use egui::TextStyle::*;
+
+    let ctx = egui_context.ctx_mut();
+    let mut style = (*ctx.style()).clone();
+    style.text_styles = [
+        (Heading, FontId::new(24.0, Proportional)),
+        (Body, FontId::new(16.0, Proportional)),
+        (Monospace, FontId::new(16.0, Proportional)),
+        (Button, FontId::new(16.0, Proportional)),
+        (Small, FontId::new(12.0, Proportional)),
+    ]
+    .into();
+    ctx.set_style(style);
 }
 
 fn load_images(
@@ -238,8 +257,15 @@ impl Default for SceneChannel {
     }
 }
 
+struct PWUrl(String);
+impl Default for PWUrl {
+    fn default() -> Self {
+        Self(String::from("https://planetwars.dev/upload"))
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
-pub fn ui_editor(
+fn ui_editor(
     mut egui_context: ResMut<EguiContext>,
     query: Query<(&Location, &PlanetData, Entity, &Selected), Without<HoverPlanet>>,
     mut hovering_ui: ResMut<HoveringUI>,
@@ -247,8 +273,10 @@ pub fn ui_editor(
     mut scene_events: EventWriter<SceneEvent>,
 
     mut size_buf: Local<String>,
+    mut url_buf: Local<PWUrl>,
     mut scale: Local<f32>,
     mut enabled: Local<bool>,
+    mut help_closed: Local<bool>,
 ) {
     hovering_ui.0 = false;
     let resp = egui::SidePanel::right("right_panel")
@@ -278,10 +306,20 @@ pub fn ui_editor(
                 };
             });
 
+                ui.label("Planetwars upload url: ");
+                ui.text_edit_singleline(&mut url_buf.deref_mut().0);
+
             ui.add_enabled_ui(*enabled, |ui| {
+                ui.horizontal(|ui| {
+
                 if ui.button("Export").clicked() {
                     scene_events.send(SceneEvent::Export(*scale));
                 }
+
+                if ui.button("Upload").clicked() {
+                    scene_events.send(SceneEvent::Upload(*scale, url_buf.0.clone()));
+                }
+                });
             });
 
             ui.add_space(8.);
@@ -317,7 +355,35 @@ pub fn ui_editor(
                         ui.separator();
                     }
                 }
-            })
+
+            if !*help_closed {
+                ui.separator();
+                    ui.heading("Creation");
+                    ui.label("Move around with WASD or arrow keys");
+                    ui.label("Left click to place a planet.");
+                    ui.label("Right click to place a planet.");
+                    ui.label("Right click again to show the name name of the planet.");
+                    ui.label("Right click to delete a planet.");
+                    ui.label("Click colored squares to change planet owner.");
+                    ui.label("Click different shapes to change the map layout.");
+                ui.separator();
+                    ui.heading("Editing");
+                    ui.label("Right, change the name of the planet and ship count.");
+                    ui.label("You can also change to owner of a planet on the right side.");
+                ui.separator();
+                    ui.heading("Exporting");
+                    ui.label("'Save' lets you save the editor's state to resume later.");
+                    ui.label("'Load' lets you resume the eidtor's state.");
+                    ui.label("'Export' lets you export your creation to a valid planetwars map.");
+                    ui.label("Longest expedition is a field that changes the scale of the map");
+                    ui.label("the number entered is the total number of turns between the furthest planets on the map.");
+                ui.separator();
+                    if ui.button("Close help").clicked() {
+                        *help_closed = true;
+                    }
+            }
+            });
+
         })
         .response;
     hovering_ui.0 = hovering_ui.0 || resp.hovered();
@@ -371,6 +437,7 @@ fn ui_system(
             ui.allocate_ui_at_rect(response.rect, |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.label(format!("fps {}", fps.0));
+                    ui.label(format!("hovering {}", hovering_ui.0));
                     ui.label(format!("zoom {}", config.zoom));
 
                     let size = Vec2::splat(32.0);

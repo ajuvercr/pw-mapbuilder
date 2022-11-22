@@ -38,7 +38,7 @@ jobs:
       - name: run wasm-bindgen
         run: wasm-bindgen --out-dir ./out/ --target web --weak-refs --reference-types ./target/wasm32-unknown-unknown/release/mapbuilder.wasm
       - name: create web folder
-        run: mkdir web && cp index.html web && cp script.js web && cp -r out web && cp -r assets web
+        run: mkdir web && cp favicon.png web && cp index.html web && cp script.js web && cp -r out web && cp -r assets web
       - name: publish to gh pages
         uses: peaceiris/actions-gh-pages@v3
         with:
