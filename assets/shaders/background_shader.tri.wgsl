@@ -43,7 +43,7 @@ struct FragmentInput {
 };
 
 fn  plot(st: f32, pct: f32) -> f32{
-    return step(abs(st), 0.01);
+    return step(abs(st), 0.02);
 }
 
 fn rotate(input: vec2<f32>, a: f32) -> vec2<f32> {
@@ -55,13 +55,35 @@ fn rotate(input: vec2<f32>, a: f32) -> vec2<f32> {
     );
 }
 
+fn dashed(s: f32) -> f32 {
+   return step(fract(s), 0.4);
+}
+fn dashed_twice(l: vec2<f32>) -> f32 {
+    var t_height = 0.8660254;
+    var hor1 = dashed(l.x + 0.25) * abs(fract(l.y ));
+    var hor2 = dashed(l.x - 0.25) * abs(fract(l.y + 0.5));
+    return max(hor1, hor2);
+}
+
+fn op(x: f32) -> f32 {
+    var t_height = 0.8660254;
+    return abs(fract(x / t_height + 0.5) - 0.5);
+}
+
 @fragment
 fn fragment(in: FragmentInput) -> @location(0) vec4<f32> {
+    if(max(abs(in.position.x), abs(in.position.y)) < 0.02) {
+    return vec4(1.0, 0.0, 0.0, 1.0);
+}
     var t_height = 0.8660254;
-    var fi = fract(in.position);
 
+    var fi = fract(in.position);
     var d1 = rotate(vec2(in.position.x, in.position.y), 60.0 * 3.141592 / 180.);
     var d2 = rotate(vec2(in.position.x, in.position.y), 120.0 * 3.141592 / 180.);
+    
+    var hor = dashed_twice(in.position);
+    var di1 = dashed_twice(d1);
+    var di2 = dashed_twice(d2);
 
     var hor = fract(in.position.y / t_height - 0.005);
     var d1_r = fract(d1.y / t_height - 0.005);
