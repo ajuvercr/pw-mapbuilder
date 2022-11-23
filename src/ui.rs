@@ -274,6 +274,7 @@ fn ui_editor(
 
     mut size_buf: Local<String>,
     mut url_buf: Local<PWUrl>,
+    mut map_name: Local<String>,
     mut scale: Local<f32>,
     mut enabled: Local<bool>,
     mut help_closed: Local<bool>,
@@ -308,16 +309,18 @@ fn ui_editor(
 
                 ui.label("Planetwars upload url: ");
                 ui.text_edit_singleline(&mut url_buf.deref_mut().0);
+                ui.label("Map name: ");
+                ui.text_edit_singleline(map_name.deref_mut());
 
-            ui.add_enabled_ui(*enabled, |ui| {
+            ui.add_enabled_ui(*enabled && map_name.len() > 0, |ui| {
                 ui.horizontal(|ui| {
 
                 if ui.button("Export").clicked() {
-                    scene_events.send(SceneEvent::Export(*scale));
+                    scene_events.send(SceneEvent::Export{girth: *scale, name: map_name.to_string()});
                 }
 
                 if ui.button("Upload").clicked() {
-                    scene_events.send(SceneEvent::Upload(*scale, url_buf.0.clone()));
+                    scene_events.send(SceneEvent::Upload{girth: *scale, url: url_buf.0.clone(), name: map_name.to_string()});
                 }
                 });
             });

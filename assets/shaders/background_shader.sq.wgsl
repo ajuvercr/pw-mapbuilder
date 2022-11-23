@@ -42,7 +42,7 @@ struct FragmentInput {
 };
 
 fn  plot(st: f32, pct: f32) -> f32{
-    return step(abs(st), 0.01);
+    return step(abs(st), 0.02);
 }
 
 /// Entry point for the fragment shader

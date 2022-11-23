@@ -36,12 +36,13 @@ jobs:
       - name: install wasm-bindgen
         uses: jetli/wasm-bindgen-action@v0.1.0
       - name: run wasm-bindgen
-        run: wasm-bindgen --out-dir ./out/ --target web --weak-refs --reference-types ./target/wasm32-unknown-unknown/release/mapbuilder.wasm
+        run: wasm-bindgen --out-dir ./web/out --target web --weak-refs --reference-types ./target/wasm32-unknown-unknown/release/mapbuilder.wasm
       - name: create web folder
-        run: mkdir web && cp favicon.png web && cp index.html web && cp script.js web && cp -r out web && cp -r assets web
+        run: cp -r assets web
       - name: publish to gh pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           target_branch: gh-pages
           publish_dir: ${{github.workspace}}/web
           github_token: ${{ secrets.GITHUB_TOKEN }}
+

@@ -12,8 +12,15 @@ pub enum SceneEvent {
     Save,
     Load,
     LoadCont(String),
-    Export(f32),
-    Upload(f32, String),
+    Export {
+        girth: f32,
+        name: String,
+    },
+    Upload {
+        girth: f32,
+        name: String,
+        url: String,
+    },
 }
 
 pub struct ScenePlugin;
@@ -45,6 +52,7 @@ fn get_planets_export(
     dist: f32,
     planets: &Query<(&PlanetData, &Location, Entity)>,
     current_config: &MapConfig,
+    name: &str,
 ) -> Value {
     #[derive(Serialize)]
     struct Planet<'a> {
@@ -88,7 +96,7 @@ fn get_planets_export(
         })
         .collect();
 
-    serde_json::json!({ "planets": planets })
+    serde_json::json!({ "planets": planets, "name": name })
 }
 
 fn handle_scene_events(
@@ -122,8 +130,9 @@ fn handle_scene_events(
 
                 io::save(data);
             }
-            SceneEvent::Export(dist) => {
-                let content = get_planets_export(*dist, &planets, &current_config).to_string();
+            SceneEvent::Export { girth, name } => {
+                let content =
+                    get_planets_export(*girth, &planets, &current_config, &name).to_string();
                 io::export(content);
             }
             SceneEvent::Load => {
@@ -144,8 +153,9 @@ fn handle_scene_events(
                 &mut map_events,
                 &mut planet_events,
             ),
-            SceneEvent::Upload(dist, url) => {
-                let content = get_planets_export(*dist, &planets, &current_config).to_string();
+            SceneEvent::Upload { girth, url, name } => {
+                let content =
+                    get_planets_export(*girth, &planets, &current_config, &name).to_string();
                 io::upload(url, content);
             }
         }
