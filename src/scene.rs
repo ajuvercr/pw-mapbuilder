@@ -48,21 +48,21 @@ struct Scene {
     planets: Vec<ScenePlanet>,
 }
 
+#[derive(Serialize)]
+struct Planet<'a> {
+    name: &'a str,
+    x: f32,
+    y: f32,
+    owner: Option<usize>,
+    ship_count: usize,
+}
+
 fn get_planets_export(
     dist: f32,
     planets: &Query<(&PlanetData, &Location, Entity)>,
     current_config: &MapConfig,
     name: &str,
 ) -> Value {
-    #[derive(Serialize)]
-    struct Planet<'a> {
-        name: &'a str,
-        x: f32,
-        y: f32,
-        owner: Option<usize>,
-        ship_count: usize,
-    }
-
     let mut longest_dist = 0.0;
     for (_, l1, _) in planets {
         let t1 = current_config.shape_transform(l1, 0.);
@@ -86,11 +86,13 @@ fn get_planets_export(
             let x = t1.translation.x;
             let y = t1.translation.y;
 
+            let owner = (data.player.0 != 0).then_some(data.player.0);
+
             Planet {
                 name: &data.name,
                 x: x * scale,
                 y: y * scale,
-                owner: Some(data.player.0),
+                owner,
                 ship_count: data.ship_count,
             }
         })
