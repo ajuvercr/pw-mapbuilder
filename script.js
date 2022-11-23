@@ -10,7 +10,8 @@ export function save(content) {
 }
 
 export async function load() {
-    const f = document.getElementById("file2");
+    const f = document.createElement("input");
+    f.type = "file";
     f.onchange = async () => {
         f.onchange = () => { };
         console.log(f.files);
@@ -31,9 +32,8 @@ export function upload(url, content) {
     fetch(url, {
         method: "POST",
         body: content,
-        mode: 'cors',
         headers: {
-            'Access-Control-Allow-Origin': '*'
+            'Content-Type': "application/json"
         }
     });
 }
