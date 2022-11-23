@@ -260,7 +260,7 @@ impl Default for SceneChannel {
 struct PWUrl(String);
 impl Default for PWUrl {
     fn default() -> Self {
-        Self(String::from("https://planetwars.dev/upload"))
+        Self(String::from("https://planetwars.dev/api/maps"))
     }
 }
 
